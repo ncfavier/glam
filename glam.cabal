@@ -1,0 +1,22 @@
+cabal-version:       2.4
+
+name:                glam
+version:             0.0
+synopsis:            The guarded λ-calculus
+description:
+  A simple implementation of Clouston, Bizjak, Bugge and Birkedal's guarded λ-calculus.
+homepage:            https://git.monade.li/glam
+license:             ISC
+license-file:        LICENSE
+author:              Naïm Favier
+maintainer:          n@monade.li
+category:            Compilers/Interpreters
+
+library
+  exposed-modules:
+    Glam.Term
+    Glam.Type
+  build-depends:       base ^>=4.14.0.0, containers
+  hs-source-dirs:      src
+  default-language:    Haskell2010
+
