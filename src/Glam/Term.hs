@@ -136,15 +136,16 @@ reduce (Unbox (Box (Subst s t)))              = Just (substitute s t)
 reduce (Prev (Subst s (Next t))) | Map.null s = Just t
 reduce (Prev (Subst s t)) | not (Map.null s)  = Just (Prev (Subst Map.empty (substitute s t)))
 -- Context rules (weak call-by-name evaluation)
-reduce (t1 :$: t2)        | Just t1' <- reduce t1           = Just (t1' :$: t2)
-reduce (InL t)            | Just t' <- reduce t             = Just (InL t')
-reduce (InR t)            | Just t' <- reduce t             = Just (InR t')
-reduce (Case t t1 t2)     | Just t' <- reduce t             = Just (Case t' t1 t2)
-reduce (Unfold t)         | Just t' <- reduce t             = Just (Unfold t')
-reduce (Unbox t)          | Just t' <- reduce t             = Just (Unbox t')
-reduce (Prev (Subst s t)) | Map.null s, Just t' <- reduce t = Just (Prev (Subst s t'))
-reduce (t1 :<*>: t2)      | Just t1' <- reduce t1           = Just (t1' :<*>: t2)
-reduce (t1 :<*>: t2)      | Just t2' <- reduce t2           = Just (t1 :<*>: t2')
+reduce (t1 :$: t2)        | Just t1' <- reduce t1 = Just (t1' :$: t2)
+reduce (Fst t)            | Just t' <- reduce t   = Just (Fst t')
+reduce (Snd t)            | Just t' <- reduce t   = Just (Snd t')
+reduce (Case t t1 t2)     | Just t' <- reduce t   = Just (Case t' t1 t2)
+reduce (Unfold t)         | Just t' <- reduce t   = Just (Unfold t')
+reduce (Unbox t)          | Just t' <- reduce t   = Just (Unbox t')
+reduce (Prev (Subst s t)) | Map.null s
+                          , Just t' <- reduce t   = Just (Prev (Subst s t'))
+reduce (t1 :<*>: t2)      | Just t1' <- reduce t1 = Just (t1' :<*>: t2)
+                          | Just t2' <- reduce t2 = Just (t1 :<*>: t2')
 reduce _ = Nothing
 
 -- Reduce a term to a (weak) normal form.
@@ -197,5 +198,3 @@ instance Show Term where
     showsPrec d (Box (Subst s t)) = showParen (d > 0) $
         showString "box {" . showString (pad (showSubst s)) . showString "} in " . shows t
     showsPrec d (Unbox t) = showParen (d > appPrec) $ showString "unbox " . showsPrec (appPrec + 1) t
-
--- Parsing: TODO

@@ -1,1 +1,3 @@
-- base types (integers, booleans, ...)
+- parsing, REPL
+- type checking/inference
+- base types (integers, booleans, ...) and operations
