@@ -6,6 +6,7 @@ import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Data.Set (Set)
 import qualified Data.Set as Set
+import           Numeric.Natural
 
 type Var = String
 
@@ -121,6 +122,8 @@ substitute1 x s = substitute (Map.singleton x s)
 prev t = Prev (Subst (Map.fromSet Var (freeVariables t)) t)
 box t = Box (Subst (Map.fromSet Var (freeVariables t)) t)
 
+fix_ x t = Fix (Abs x t)
+
 -- Small-step operational semantics for the calculus: performs a single reduction step, if possible.
 reduce :: Term -> Maybe Term
 -- Reduction rules
@@ -152,14 +155,21 @@ reduce _ = Nothing
 normalise :: Term -> Term
 normalise t = maybe t normalise (reduce t)
 
-termToNat :: Term -> Maybe Integer
+termToNat :: Term -> Maybe Natural
 termToNat Zero     = Just 0
 termToNat (Succ t) = succ <$> termToNat t
 termToNat _        = Nothing
 
+natToTerm :: Natural -> Term
+natToTerm 0 = Zero
+natToTerm n = Succ (natToTerm (pred n))
+
 -- Printing
 
 showSubst s = intercalate "; " [v ++ " = " ++ show t | (v, t) <- Map.assocs s]
+
+showDelayed kw d (Subst s t) = showParen (d > 0) $
+    showString kw . showString " {" . showString (pad (showSubst s)) . showString "} in " . shows t
 
 pad "" = ""
 pad s = " " ++ s ++ " "
@@ -171,30 +181,43 @@ instance Show Term where
     showsPrec _ Zero = shows 0
     showsPrec d t@(Succ t')
         | Just n <- termToNat t = shows n
-        | otherwise = showParen (d > appPrec) $ showString "succ " . showsPrec (appPrec + 1) t'
+        | otherwise = showParen (d > appPrec) $
+            showString "succ " . showsPrec (appPrec + 1) t'
     showsPrec d Unit = showString "()"
-    showsPrec d (Pair t1 t2) = showParen True $ shows t1 . showString ", " . shows t2
-    showsPrec d (Fst t) = showParen (d > appPrec) $ showString "fst " . showsPrec (appPrec + 1) t
-    showsPrec d (Snd t) = showParen (d > appPrec) $ showString "snd " . showsPrec (appPrec + 1) t
-    showsPrec d (Abort t) = showParen (d > appPrec) $ showString "abort " . showsPrec (appPrec + 1) t
-    showsPrec d (InL t) = showParen (d > appPrec) $ showString "left " . showsPrec (appPrec + 1) t
-    showsPrec d (InR t) = showParen (d > appPrec) $ showString "right " . showsPrec (appPrec + 1) t
+    showsPrec d (Pair t1 t2) = showParen True $
+        shows t1 . showString ", " . shows t2
+    showsPrec d (Fst t) = showParen (d > appPrec) $
+        showString "fst " . showsPrec (appPrec + 1) t
+    showsPrec d (Snd t) = showParen (d > appPrec) $
+        showString "snd " . showsPrec (appPrec + 1) t
+    showsPrec d (Abort t) = showParen (d > appPrec) $
+        showString "abort " . showsPrec (appPrec + 1) t
+    showsPrec d (InL t) = showParen (d > appPrec) $
+        showString "left " . showsPrec (appPrec + 1) t
+    showsPrec d (InR t) = showParen (d > appPrec) $
+        showString "right " . showsPrec (appPrec + 1) t
     showsPrec d (Case t (Abs x1 t1) (Abs x2 t2)) = showParen (d > 0) $
         showString "case " . shows t . showString " of { left "
-            . showString x1 . showString " -> " . shows t1
+            . showString x1 . showString ". " . shows t1
             . showString "; right "
-            . showString x2 . showString " -> " . shows t2
+            . showString x2 . showString ". " . shows t2
             . showString " }"
-    showsPrec d (Abs x t) = showParen (d > 0) $ showChar '\\' . showString x . showString " -> " . shows t
-    showsPrec d (t1 :$: t2) = showParen (d > appPrec) $ showsPrec appPrec t1 . showChar ' ' . showsPrec (appPrec + 1) t2
-    showsPrec d (Fold t) = showParen (d > appPrec) $ showString "fold " . showsPrec (appPrec + 1) t
-    showsPrec d (Unfold t) = showParen (d > appPrec) $ showString "unfold " . showsPrec (appPrec + 1) t
-    showsPrec d (Fix (Abs x t)) = showParen (d > 0) $ showString "fix " . showString x . showString " -> " . shows t
-    showsPrec d (Next t) = showParen (d > appPrec) $ showString "next " . showsPrec (appPrec + 1) t
-    showsPrec d (Prev (Subst s t)) = showParen (d > 0) $
-        showString "prev {" . showString (pad (showSubst s)) . showString "} in " . shows t
-    showsPrec d (t1 :<*>: t2) = showParen (d > prec) $ showsPrec prec t1 . showString " <*> " . showsPrec (prec + 1) t2
+    showsPrec d (Abs x t) = showParen (d > 0) $
+        showChar '\\' . showString x . showString ". " . shows t
+    showsPrec d (t1 :$: t2) = showParen (d > appPrec) $
+        showsPrec appPrec t1 . showChar ' ' . showsPrec (appPrec + 1) t2
+    showsPrec d (Fold t) = showParen (d > appPrec) $
+        showString "fold " . showsPrec (appPrec + 1) t
+    showsPrec d (Unfold t) = showParen (d > appPrec) $
+        showString "unfold " . showsPrec (appPrec + 1) t
+    showsPrec d (Fix (Abs x t)) = showParen (d > 0) $
+        showString "fix " . showString x . showString ". " . shows t
+    showsPrec d (Next t) = showParen (d > appPrec) $
+        showString "next " . showsPrec (appPrec + 1) t
+    showsPrec d (Prev d') = showDelayed "prev" d d'
+    showsPrec d (t1 :<*>: t2) = showParen (d > prec) $
+        showsPrec prec t1 . showString " <*> " . showsPrec (prec + 1) t2
         where prec = 4
-    showsPrec d (Box (Subst s t)) = showParen (d > 0) $
-        showString "box {" . showString (pad (showSubst s)) . showString "} in " . shows t
-    showsPrec d (Unbox t) = showParen (d > appPrec) $ showString "unbox " . showsPrec (appPrec + 1) t
+    showsPrec d (Box d') = showDelayed "box" d d'
+    showsPrec d (Unbox t) = showParen (d > appPrec) $
+        showString "unbox " . showsPrec (appPrec + 1) t

@@ -33,15 +33,15 @@ freeTypeVariables (Later t)    = freeTypeVariables t
 freeTypeVariables (Constant t) = freeTypeVariables t
 freeTypeVariables (TFix x t)   = Set.delete x (freeTypeVariables t)
 
-isGuarded :: TVar -> Type -> Bool
-isGuarded x (TVar y)      = x /= y
-isGuarded _ One          = True
-isGuarded x (t1 :*: t2)  = isGuarded x t1 && isGuarded x t2
-isGuarded x (t1 :+: t2)  = isGuarded x t1 && isGuarded x t2
-isGuarded x (t1 :->: t2) = isGuarded x t1 && isGuarded x t2
-isGuarded _ (Later _)    = True
-isGuarded x (Constant t) = isGuarded x t
-isGuarded x (TFix y t)   = x == y || isGuarded x t
+guardedIn :: TVar -> Type -> Bool
+x `guardedIn` TVar y       = x /= y
+_ `guardedIn` One          = True
+x `guardedIn` (t1 :*: t2)  = x `guardedIn` t1 && x `guardedIn` t2
+x `guardedIn` (t1 :+: t2)  = x `guardedIn` t1 && x `guardedIn` t2
+x `guardedIn` (t1 :->: t2) = x `guardedIn` t1 && x `guardedIn` t2
+_ `guardedIn` Later _      = True
+x `guardedIn` Constant t   = x `guardedIn` t
+x `guardedIn` TFix y t     = x == y || x `guardedIn` t
 
 -- Valid types.
 isValid :: Type -> Bool
@@ -52,7 +52,7 @@ isValid (t1 :+: t2)  = isValid t1 && isValid t2
 isValid (t1 :->: t2) = isValid t1 && isValid t2
 isValid (Later t)    = isValid t
 isValid (Constant t) = isValid t && Set.null (freeTypeVariables t)
-isValid (TFix x t)   = isValid t && isGuarded x t
+isValid (TFix x t)   = isValid t && x `guardedIn` t
 
 -- Constant types.
 isConstant :: Type -> Bool
@@ -73,11 +73,17 @@ funPrec = 0
 modPrec = 8
 
 instance Show Type where
-    showsPrec _ (TVar x) = showString x
-    showsPrec _ One = showString "1"
-    showsPrec d (t1 :*: t2) = showParen (d > prodPrec) $ showsPrec (prodPrec + 1) t1 . showString " * " . showsPrec (prodPrec + 1) t2
-    showsPrec d (t1 :+: t2) = showParen (d > sumPrec) $ showsPrec (sumPrec + 1) t1 . showString " + " . showsPrec (sumPrec + 1) t2
-    showsPrec d (t1 :->: t2) = showParen (d > funPrec) $ showsPrec (funPrec + 1) t1 . showString " -> " . showsPrec funPrec t2
-    showsPrec d (Later t) = showParen (d > modPrec) $ showString ">" . showsPrec modPrec t
-    showsPrec d (Constant t) = showParen (d > modPrec) $ showString "#" . showsPrec modPrec t
-    showsPrec d (TFix x t) = showParen (d > 0) $ showString "Fix " . showString x . showString " -> " . shows t
+    showsPrec _ (TVar x)     = showString x
+    showsPrec _ One          = showString "1"
+    showsPrec d (t1 :*: t2)  = showParen (d > prodPrec) $
+        showsPrec (prodPrec + 1) t1 . showString " * " . showsPrec (prodPrec + 1) t2
+    showsPrec d (t1 :+: t2)  = showParen (d > sumPrec) $
+        showsPrec (sumPrec + 1) t1 . showString " + " . showsPrec (sumPrec + 1) t2
+    showsPrec d (t1 :->: t2) = showParen (d > funPrec) $
+        showsPrec (funPrec + 1) t1 . showString " -> " . showsPrec funPrec t2
+    showsPrec d (Later t)    = showParen (d > modPrec) $
+        showString ">" . showsPrec modPrec t
+    showsPrec d (Constant t) = showParen (d > modPrec) $
+        showString "#" . showsPrec modPrec t
+    showsPrec d (TFix x t)   = showParen (d > 0) $
+        showString "Fix " . showString x . showString ". " . shows t
