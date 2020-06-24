@@ -1,2 +1,3 @@
+- recursive let-bindings
 - type checking/inference
 - base types (integers, booleans, ...) and operations

@@ -26,6 +26,8 @@ data Term =
     | Abort Term | InL Term | InR Term | Case Term Term Term
     -- Functions
     | Abs Var Term | Term :$: Term
+    -- Let-bindings
+    | Let Delayed
     -- Recursion operations
     | Fold Term | Unfold Term | Fix Term
     -- 'Later' operations
@@ -52,6 +54,7 @@ freeVariables (InR t)        = freeVariables t
 freeVariables (Case t t1 t2) = freeVariables t <> freeVariables t1 <> freeVariables t2
 freeVariables (Abs x t)      = Set.delete x (freeVariables t)
 freeVariables (t1 :$: t2)    = freeVariables t1 <> freeVariables t2
+freeVariables (Let d)        = freeVariablesDelayed d
 freeVariables (Fold t)       = freeVariables t
 freeVariables (Unfold t)     = freeVariables t
 freeVariables (Fix t)        = freeVariables t
@@ -103,6 +106,7 @@ substitute s (Case t t1 t2) = Case (substitute s t) (substitute s t1) (substitut
 substitute s t@Abs{}        = Abs x (substitute (Map.delete x s) t')
     where Abs x t' = avoidCapture (freeVariablesSubst s) t
 substitute s (t1 :$: t2)    = substitute s t1 :$: substitute s t2
+substitute s (Let d)        = Let (substituteDelayed s d)
 substitute s (Fold t)       = Fold (substitute s t)
 substitute s (Unfold t)     = Unfold (substitute s t)
 substitute s (Fix t)        = Fix (substitute s t)
@@ -128,6 +132,7 @@ fix_ x t = Fix (Abs x t)
 reduce :: Term -> Maybe Term
 -- Reduction rules
 reduce (Abs x s :$: t)                        = Just (substitute1 x t s)
+reduce (Let (Subst s t))                      = Just (substitute s t)
 reduce (Fst (Pair t1 _))                      = Just t1
 reduce (Snd (Pair _ t2))                      = Just t2
 reduce (Case (InL t) (Abs x1 t1) _)           = Just (substitute1 x1 t t1)
@@ -151,9 +156,13 @@ reduce (t1 :<*>: t2)      | Just t1' <- reduce t1 = Just (t1' :<*>: t2)
                           | Just t2' <- reduce t2 = Just (t1 :<*>: t2')
 reduce _ = Nothing
 
+-- The sequence of reduction steps starting with t.
+reduction :: Term -> [Term]
+reduction t = t:maybe [] reduction (reduce t)
+
 -- Reduce a term to a (weak) normal form.
 normalise :: Term -> Term
-normalise t = maybe t normalise (reduce t)
+normalise = last . reduction
 
 termToNat :: Term -> Maybe Natural
 termToNat Zero     = Just 0
@@ -206,6 +215,7 @@ instance Show Term where
         showChar '\\' . showString x . showString ". " . shows t
     showsPrec d (t1 :$: t2) = showParen (d > appPrec) $
         showsPrec appPrec t1 . showChar ' ' . showsPrec (appPrec + 1) t2
+    showsPrec d (Let d') = showDelayed "let" d d'
     showsPrec d (Fold t) = showParen (d > appPrec) $
         showString "fold " . showsPrec (appPrec + 1) t
     showsPrec d (Unfold t) = showParen (d > appPrec) $

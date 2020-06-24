@@ -48,7 +48,7 @@ number = lexeme L.decimal
 
 keyword s = label (show s) $ try $ lexeme $ string s <* notFollowedBy alphaNumChar
 
-reserved = ["succ", "fst", "snd", "abort", "left", "right", "case", "of",
+reserved = ["succ", "fst", "snd", "abort", "left", "right", "case", "of", "let",
             "fold", "unfold", "fix", "next", "prev", "box", "unbox", "in"]
 
 ident = label "identifier" $ try $ lexeme $ do
@@ -60,7 +60,7 @@ ident = label "identifier" $ try $ lexeme $ do
 lambda = symbol "λ" <|> symbol "\\"
 
 term :: Parser Term
-term = choice [abs_, fix__, case_, try prevIn, try boxIn, makeExprParser base ops] <?> "term"
+term = choice [abs_, fix__, case_, letIn, try prevIn, try boxIn, makeExprParser base ops] <?> "term"
     where
     abs_ = flip (foldr Abs) <$> (lambda *> some ident) <*> (dot *> term)
     fix__ = flip (foldr fix_) <$> ("fix" *> some ident) <*> (dot *> term)
@@ -72,6 +72,7 @@ term = choice [abs_, fix__, case_, try prevIn, try boxIn, makeExprParser base op
             "right"; x2 <- ident; dot; t2 <- term
             return $ Case t (Abs x1 t1) (Abs x2 t2)
     delayed = Subst <$> braces subst <*> ("in" *> term)
+    letIn = Let <$> ("let" *> delayed)
     prevIn = Prev <$> ("prev" *> delayed)
     boxIn = Box <$> ("box" *> delayed)
     base = choice [Var <$> ident, natToTerm <$> number, mkParens =<< parens (term `sepBy` comma)]
