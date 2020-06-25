@@ -3,8 +3,8 @@
     <head>
         <meta charset=utf-8>
         <title>glam</title>
-        <link rel="stylesheet" href="https://www.unpkg.com/codemirror@5.55.0/lib/codemirror.css">
-        <link rel="stylesheet" href="https://www.unpkg.com/codemirror@5.55.0/theme/idea.css">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/codemirror.min.css">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/theme/idea.min.css">
         <style>
             body {
                 font-family: serif;
@@ -28,6 +28,7 @@
                 padding: 10px;
             }
         </style>
+        <script src="glam.min.js" defer></script>
     </head>
     <body>
         <h1><span id=glam>glam</span> — The guarded λ-calculus</h1>
@@ -48,9 +49,8 @@ let { zeros = box (fix s. consg 0 s)
 hd (tl (tl zeros))
 </textarea>
         <pre id=output>...</pre>
-        <script src="https://www.unpkg.com/codemirror@5.55.0/lib/codemirror.js"></script>
-        <script src="glam.js"></script>
-        <script src="all.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/codemirror.min.js"></script>
+        <script src="mode_glam.js"></script>
         <script>
             const editor = CodeMirror.fromTextArea(document.getElementById("input"), {
                 lineNumbers: true,
