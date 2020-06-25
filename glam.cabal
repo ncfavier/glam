@@ -40,3 +40,6 @@ executable glam
     Glam.Term
     Glam.Type
     Glam.Parse
+  if impl(ghcjs)
+    build-depends:
+      ghcjs-base

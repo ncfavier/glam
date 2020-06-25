@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset=utf-8>
+        <title>glam</title>
+        <link rel="stylesheet" href="https://www.unpkg.com/codemirror@5.55.0/lib/codemirror.css">
+        <link rel="stylesheet" href="https://www.unpkg.com/codemirror@5.55.0/theme/idea.css">
+        <style>
+            body {
+                font-family: serif;
+                padding: 20px 100px;
+            }
+
+            h1 {
+                font-weight: normal;
+            }
+
+            #glam {
+                font-weight: bold;
+                color: #30a;
+            }
+
+            .CodeMirror, #output {
+                border: 1px solid #ddd !important;
+            }
+
+            #output {
+                padding: 10px;
+            }
+        </style>
+    </head>
+    <body>
+        <h1><span id=glam>glam</span> — The guarded λ-calculus</h1>
+<textarea id=input>
+let { consg = \x s. fold (x, s)
+    ; hdg = \s. fst (unfold s)
+    ; tlg = \s. snd (unfold s)
+    } in
+
+let { cons = \x s. box (consg x (next (unbox s)))
+    ; hd = \s. hdg (unbox s)
+    ; tl = \s. box (prev (tlg (unbox s)))
+    } in
+
+let { zeros = box (fix s. consg 0 s)
+    } in
+
+hd (tl (tl zeros))
+</textarea>
+        <pre id=output>...</pre>
+        <script src="https://www.unpkg.com/codemirror@5.55.0/lib/codemirror.js"></script>
+        <script src="glam.js"></script>
+        <script src="all.js"></script>
+        <script>
+            const editor = CodeMirror.fromTextArea(document.getElementById("input"), {
+                lineNumbers: true,
+                matchBrackets: true,
+                theme: "idea",
+                mode: "glam"
+            });
+
+            const output = document.getElementById('output');
+
+            const update = () => {
+                output.innerHTML = eval_(editor.getValue());
+            };
+
+            const init = f => {
+                eval_ = f;
+                update();
+                editor.on('change', update);
+            };
+        </script>
+    </body>
+</html>
