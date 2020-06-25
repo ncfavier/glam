@@ -22,9 +22,10 @@ common glam
     containers,
     megaparsec,
     parser-combinators,
-    haskeline
+    mtl
   hs-source-dirs:      src
   default-language:    Haskell2010
+  ghc-options:         -Wunused-matches
 
 library
   import: glam
@@ -35,11 +36,15 @@ library
 
 executable glam
   import: glam
-  main-is: Main.hs
+  if impl(ghcjs)
+    main-is: MainJS.hs
+    build-depends:
+      ghcjs-base
+  else
+    main-is: Main.hs
+    build-depends:
+      haskeline
   other-modules:
     Glam.Term
     Glam.Type
     Glam.Parse
-  if impl(ghcjs)
-    build-depends:
-      ghcjs-base

@@ -93,9 +93,9 @@ avoidCaptureDelayed vs d@(Subst s t)
 -- Capture-avoiding substitution.
 substitute :: Subst -> Term -> Term
 substitute s (Var x)        = Map.findWithDefault (Var x) x s
-substitute s Zero           = Zero
+substitute _ Zero           = Zero
 substitute s (Succ t)       = Succ (substitute s t)
-substitute s Unit           = Unit
+substitute _ Unit           = Unit
 substitute s (Pair t1 t2)   = Pair (substitute s t1) (substitute s t2)
 substitute s (Fst t)        = Fst (substitute s t)
 substitute s (Snd t)        = Snd (substitute s t)
@@ -187,13 +187,13 @@ appPrec = 10
 
 instance Show Term where
     showsPrec _ (Var x) = showString x
-    showsPrec _ Zero = shows 0
+    showsPrec _ Zero = showString "0"
     showsPrec d t@(Succ t')
         | Just n <- termToNat t = shows n
         | otherwise = showParen (d > appPrec) $
             showString "succ " . showsPrec (appPrec + 1) t'
-    showsPrec d Unit = showString "()"
-    showsPrec d (Pair t1 t2) = showParen True $
+    showsPrec _ Unit = showString "()"
+    showsPrec _ (Pair t1 t2) = showParen True $
         shows t1 . showString ", " . shows t2
     showsPrec d (Fst t) = showParen (d > appPrec) $
         showString "fst " . showsPrec (appPrec + 1) t

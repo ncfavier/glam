@@ -1,28 +1,42 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Glam.Parse where
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+module Glam.Parse (
+    module Glam.Parse,
+    errorBundlePretty
+) where
 
 import           Data.Void
-import           Data.Bifunctor (first)
 import qualified Data.Map as Map (fromList)
 import           Data.String
 import           Control.Applicative hiding (many, some)
 import           Control.Monad.Combinators.Expr
+import           Control.Monad.State
 import           Numeric.Natural
-import           Text.Megaparsec
+import           Text.Megaparsec hiding (State)
 import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 
 import Glam.Term
 import Glam.Type
 
-type Parser = Parsec Void String
+type IndentState = Maybe SourcePos
 
-instance {-# OVERLAPPING #-} (a ~ String) => IsString (Parser a) where
+newtype Parser a = P (ParsecT Void String (State IndentState) a)
+    deriving (Functor, Applicative, Alternative, Monad, MonadPlus,
+#ifndef __GHCJS__
+              MonadFail,
+#endif
+              MonadParsec Void String, MonadState IndentState)
+
+runP (P p) f s = evalState (runParserT p f s) Nothing
+
+instance a ~ String => IsString (Parser a) where
     fromString = keyword
 
 whitespace = L.space space1 (L.skipLineComment "--")
@@ -99,7 +113,7 @@ typeIdent = label "identifier" $ try $ lexeme $ do
         else return w
 
 type_ :: Parser Type
-type_ = choice [tfix, makeExprParser base ops] <?> "type"
+type_ = tfix <|> makeExprParser base ops <?> "type"
     where
     tfix = flip (foldr TFix) <$> ("Fix" *> some typeIdent) <*> (dot *> type_)
     base = TVar <$> typeIdent <|> One <$ symbol "1" <|> parens type_
@@ -110,5 +124,4 @@ type_ = choice [tfix, makeExprParser base ops] <?> "type"
           , [binary "->" (:->:)] ]
     binary w f = InfixR (f <$ symbol w)
 
-parseOne :: Parser a -> String -> Either String a
-parseOne p = first errorBundlePretty . parse (whitespace *> p <* eof) ""
+parseOne p = runP (whitespace *> p <* eof) ""

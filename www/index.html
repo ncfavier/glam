@@ -15,7 +15,7 @@
                 font-weight: normal;
             }
 
-            #glam {
+            a {
                 font-weight: bold;
                 color: #30a;
             }
@@ -31,26 +31,26 @@
         <script src="glam.min.js" defer></script>
     </head>
     <body>
-        <h1><span id=glam>glam</span> — The guarded λ-calculus</h1>
+        <h1><a id=glam href="https://git.monade.li/glam">glam</a></span>. The guarded λ-calculus</h1>
+        <p>
+            Based on Ranald Clouston, Aleš Bizjak, Hans Bugge Grathwohl and Lars Birkedal's <a href="https://arxiv.org/abs/1606.09455">paper</a>.
+        </p>
 <textarea id=input>
-let { consg = \x s. fold (x, s)
-    ; hdg = \s. fst (unfold s)
-    ; tlg = \s. snd (unfold s)
-    } in
+consg = \x s. fold (x, s)
+hdg = \s. fst (unfold s)
+tlg = \s. snd (unfold s)
 
-let { cons = \x s. box (consg x (next (unbox s)))
-    ; hd = \s. hdg (unbox s)
-    ; tl = \s. box (prev (tlg (unbox s)))
-    } in
+cons = \x s. box (consg x (next (unbox s)))
+hd = \s. hdg (unbox s)
+tl = \s. box (prev (tlg (unbox s)))
 
-let { zeros = box (fix s. consg 0 s)
-    } in
+zeros = box (fix s. consg 0 s)
 
 hd (tl (tl zeros))
 </textarea>
         <pre id=output>...</pre>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/codemirror.min.js"></script>
-        <script src="mode_glam.js"></script>
+        <script src="glam_syntax.js"></script>
         <script>
             const editor = CodeMirror.fromTextArea(document.getElementById("input"), {
                 lineNumbers: true,
