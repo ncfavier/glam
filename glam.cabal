@@ -18,7 +18,7 @@ source-repository head
 
 common glam
   build-depends:
-    base>=4.12.0.0,
+    base >= 4.12.0.0,
     containers,
     megaparsec,
     parser-combinators,
@@ -33,6 +33,7 @@ library
     Glam.Term
     Glam.Type
     Glam.Parse
+    Glam.Interpreter
 
 executable glam
   import: glam
@@ -43,8 +44,10 @@ executable glam
   else
     main-is: Main.hs
     build-depends:
-      haskeline
+      haskeline,
+      monad-loops
   other-modules:
     Glam.Term
     Glam.Type
     Glam.Parse
+    Glam.Interpreter

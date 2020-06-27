@@ -64,6 +64,9 @@ freeVariables (t1 :<*>: t2)  = freeVariables t1 <> freeVariables t2
 freeVariables (Box d)        = freeVariablesDelayed d
 freeVariables (Unbox t)      = freeVariables t
 
+freeIn :: Var -> Term -> Bool
+x `freeIn` t = x `Set.member` freeVariables t
+
 freeVariablesSubst :: Subst -> Set Var
 freeVariablesSubst = foldMap freeVariables
 
@@ -145,6 +148,7 @@ reduce (Prev (Subst s (Next t))) | Map.null s = Just t
 reduce (Prev (Subst s t)) | not (Map.null s)  = Just (Prev (Subst Map.empty (substitute s t)))
 -- Context rules (weak call-by-name evaluation)
 reduce (t1 :$: t2)        | Just t1' <- reduce t1 = Just (t1' :$: t2)
+reduce (Succ t)           | Just t' <- reduce t   = Just (Succ t')
 reduce (Fst t)            | Just t' <- reduce t   = Just (Fst t')
 reduce (Snd t)            | Just t' <- reduce t   = Just (Snd t')
 reduce (Case t t1 t2)     | Just t' <- reduce t   = Just (Case t' t1 t2)

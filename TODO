@@ -1,3 +1,6 @@
-- recursive let-bindings
-- type checking/inference
+- line folds
+- type annotations/checking/inference
 - base types (integers, booleans, ...) and operations
+- standard library (streams, ...)
+- better interaction with streams
+- call-by-need?

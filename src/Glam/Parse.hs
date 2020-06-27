@@ -1,20 +1,14 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-module Glam.Parse (
-    module Glam.Parse,
-    errorBundlePretty
-) where
+module Glam.Parse where
 
 import           Data.Void
+import           Data.Bifunctor (first)
 import qualified Data.Map as Map (fromList)
 import           Data.String
-import           Control.Applicative hiding (many, some)
 import           Control.Monad.Combinators.Expr
 import           Control.Monad.State
 import           Numeric.Natural
@@ -27,22 +21,22 @@ import Glam.Type
 
 type IndentState = Maybe SourcePos
 
-newtype Parser a = P (ParsecT Void String (State IndentState) a)
-    deriving (Functor, Applicative, Alternative, Monad, MonadPlus,
-#ifndef __GHCJS__
-              MonadFail,
-#endif
-              MonadParsec Void String, MonadState IndentState)
+type Parser = ParsecT Void String (State IndentState)
 
-runP (P p) f s = evalState (runParserT p f s) Nothing
+runP :: Parser a -> String -> String -> Either String a
+runP p f s = first errorBundlePretty $ evalState (runParserT p f s) Nothing
 
-instance a ~ String => IsString (Parser a) where
+instance {-# OVERLAPPING #-} a ~ String => IsString (Parser a) where
     fromString = keyword
 
-whitespace = L.space space1 (L.skipLineComment "--")
-                            (L.skipBlockComment "{-" "-}")
-lexeme = L.lexeme whitespace
-symbol = L.symbol whitespace
+sp = L.space ((() <$) $ satisfy $ \c -> c == ' ' || c == '\t')
+             (L.skipLineComment "--")
+             (L.skipBlockComment "{-" "-}")
+spn = L.space space1
+              (L.skipLineComment "--")
+              (L.skipBlockComment "{-" "-}")
+lexeme = L.lexeme sp
+symbol = L.symbol sp
 
 parens    = between (symbol "(") (symbol ")")
 braces    = between (symbol "{") (symbol "}")
@@ -55,9 +49,8 @@ alpha = letterChar <|> char '_'
 
 digit = digitChar
 
-word = liftA2 (:) alpha (hidden $ many (alpha <|> digit <|> char '\'')) <?> "word"
+word = (:) <$> alpha <*> hidden (many (alpha <|> digit <|> char '\'')) <?> "word"
 
-number :: Parser Natural
 number = lexeme L.decimal
 
 keyword s = label (show s) $ try $ lexeme $ string s <* notFollowedBy alphaNumChar
@@ -76,8 +69,8 @@ lambda = symbol "λ" <|> symbol "\\"
 term :: Parser Term
 term = choice [abs_, fix__, case_, letIn, try prevIn, try boxIn, makeExprParser base ops] <?> "term"
     where
-    abs_ = flip (foldr Abs) <$> (lambda *> some ident) <*> (dot *> term)
-    fix__ = flip (foldr fix_) <$> ("fix" *> some ident) <*> (dot *> term)
+    abs_ = flip (foldr Abs) <$ lambda <*> some ident <* dot <*> term
+    fix__ = flip (foldr fix_) <$ "fix" <*> some ident <* dot <*> term
     case_ = do
         "case"; t <- term; "of"
         braces $ do
@@ -85,7 +78,7 @@ term = choice [abs_, fix__, case_, letIn, try prevIn, try boxIn, makeExprParser 
             semicolon
             "right"; x2 <- ident; dot; t2 <- term
             return $ Case t (Abs x1 t1) (Abs x2 t2)
-    delayed = Subst <$> braces subst <*> ("in" *> term)
+    delayed = Subst <$> braces subst <* "in" <*> term
     letIn = Let <$> ("let" *> delayed)
     prevIn = Prev <$> ("prev" *> delayed)
     boxIn = Box <$> ("box" *> delayed)
@@ -100,11 +93,15 @@ term = choice [abs_, fix__, case_, letIn, try prevIn, try boxIn, makeExprParser 
           , [InfixL ((:<*>:) <$ symbol "<*>")] ]
     unary (w, f) = Prefix (f <$ hidden (keyword w))
 
-assign :: Parser (Var, Term)
-assign = (,) <$> ident <*> (equal *> term)
+def :: Parser (Var, Term)
+def = try (mkDef <$> ident <*> many ident <* equal) <*> term
+    where
+    mkDef x ys t = autoFix x (foldr Abs t ys)
+    autoFix x t | x `freeIn` t = (x, Fix (Abs x t))
+                | otherwise = (x, t)
 
 subst :: Parser Subst
-subst = Map.fromList <$> assign `sepBy` semicolon
+subst = Map.fromList <$> def `sepBy` semicolon
 
 typeIdent = label "identifier" $ try $ lexeme $ do
     w <- word
@@ -115,7 +112,7 @@ typeIdent = label "identifier" $ try $ lexeme $ do
 type_ :: Parser Type
 type_ = tfix <|> makeExprParser base ops <?> "type"
     where
-    tfix = flip (foldr TFix) <$> ("Fix" *> some typeIdent) <*> (dot *> type_)
+    tfix = flip (foldr TFix) <$ "Fix" <*> some typeIdent <* dot <*> type_
     base = TVar <$> typeIdent <|> One <$ symbol "1" <|> parens type_
     mod_ = Later <$ symbol ">" <|> Constant <$ symbol "#"
     ops = [ [Prefix (foldr1 (.) <$> some mod_)]
@@ -124,4 +121,11 @@ type_ = tfix <|> makeExprParser base ops <?> "type"
           , [binary "->" (:->:)] ]
     binary w f = InfixR (f <$ symbol w)
 
-parseOne p = runP (whitespace *> p <* eof) ""
+data Statement = Define Var Term | Print Term
+    deriving Eq
+
+statement :: Parser Statement
+statement = uncurry Define <$> def <|> Print <$> term
+
+file :: Parser [Statement]
+file = spn *> statement `sepEndBy` spn <* eof
