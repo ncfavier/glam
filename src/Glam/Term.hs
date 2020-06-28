@@ -9,7 +9,7 @@ import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Numeric.Natural
 
-import Glam.Parse
+import Glam.Parser
 
 type Var = String
 
@@ -270,12 +270,12 @@ term = choice [abs_, fix__, case_, letIn, try prevIn, try boxIn, makeExprParser 
             , InfixL ((:<*>:) . Next <$ symbol "<$>") ] ]
     unary (w, f) = Prefix (f <$ hidden (keyword w))
 
-definition :: Parser (Var, Term)
-definition = try (mkDef <$> variable <*> many variable <* equal) <*> term
+binding :: Parser (Var, Term)
+binding = try (mkBinding <$> variable <*> many variable <* equal) <*> term
     where
-    mkDef x ys t = autoFix x (foldr Abs t ys)
+    mkBinding x ys t = autoFix x (foldr Abs t ys)
     autoFix x t | x `freeIn` t = (x, Fix (Abs x t))
                 | otherwise = (x, t)
 
 subst :: Parser Subst
-subst = Map.fromList <$> definition `sepBy` semicolon
+subst = Map.fromList <$> binding `sepBy` semicolon

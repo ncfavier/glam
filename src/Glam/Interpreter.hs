@@ -9,9 +9,10 @@ import           Control.Monad.State
 import           Control.Monad.Writer
 
 import Glam.Term
-import Glam.Parse
+import Glam.Type
+import Glam.Parser
 
-data Statement = Define Var Term | Print Term
+data Statement = Signature Var Type | Binding Var Term | Output Term
     deriving (Eq, Show)
 
 type GlamState = Subst
@@ -33,17 +34,23 @@ eval t = (`substitute` t) <$> get
 getDefined :: MonadGlam m => m [Var]
 getDefined = gets Map.keys
 
+signature :: Parser (Var, Type)
+signature = try ((,) <$> variable <* colon) <*> type_
+
 statement :: Parser Statement
-statement = uncurry Define <$> definition <|> Print <$> term
+statement =  uncurry Signature <$> signature
+         <|> uncurry Binding   <$> binding
+         <|>         Output    <$> term
 
 file :: Parser [Statement]
 file = whitespace *> many (lineFolded statement) <* eof
 
 runStatement :: (MonadGlam m, MonadWriter [String] m) => Statement -> m ()
-runStatement (Define x t) = do
+runStatement (Signature _ _) = return ()
+runStatement (Binding x t) = do
     t' <- eval t
     modify $ Map.insert x t'
-runStatement (Print t) = do
+runStatement (Output t) = do
     t' <- eval t
     tell [show (normalise t')]
 

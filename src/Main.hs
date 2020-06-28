@@ -10,8 +10,6 @@ import System.Environment
 import System.Exit
 import System.IO
 
-import Glam.Term
-import Glam.Parse
 import Glam.Interpreter
 
 instance MonadState s m => MonadState s (InputT m) where

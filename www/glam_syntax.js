@@ -38,9 +38,6 @@ CodeMirror.defineMode("glam", function(_config, modeConfig) {
     if (specialRE.test(ch)) {
       if (ch == '{' && source.eat('-')) {
         var t = "comment";
-        if (source.eat('#')) {
-          t = "meta";
-        }
         return switchState(source, setState, ncomment(t, 1));
       }
       return null;
@@ -65,9 +62,6 @@ CodeMirror.defineMode("glam", function(_config, modeConfig) {
 
     if (largeRE.test(ch)) {
       source.eatWhile(idRE);
-      if (source.eat('.')) {
-        return "qualifier";
-      }
       return "variable-2";
     }
 
@@ -189,16 +183,16 @@ CodeMirror.defineMode("glam", function(_config, modeConfig) {
     }
 
     setType("keyword")(
-      "case", "in", "let", "of", "prev", "box", "fix");
+      "case", "in", "let", "of", "prev", "box", "fix", "Fix");
 
     setType("keyword")(
-      "=", "\\", "λ", "->");
-
-    setType("builtin")(
-      "<*>", "<$>");
+      "=", "\\", "λ", ".", ":", "->", ">", "#", "+", "*");
 
     setType("builtin")(
       "succ", "next", "unbox", "fold", "unfold", "fst", "snd", "abort", "left", "right");
+
+    setType("builtin")(
+      "<*>", "<$>");
 
     var override = modeConfig.overrideKeywords;
     if (override) for (var word in override) if (override.hasOwnProperty(word))

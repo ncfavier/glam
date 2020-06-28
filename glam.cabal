@@ -32,7 +32,7 @@ library
   exposed-modules:
     Glam.Term
     Glam.Type
-    Glam.Parse
+    Glam.Parser
     Glam.Interpreter
 
 executable glam
@@ -49,5 +49,5 @@ executable glam
   other-modules:
     Glam.Term
     Glam.Type
-    Glam.Parse
+    Glam.Parser
     Glam.Interpreter

@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleInstances #-}
-module Glam.Parse (
-    module Glam.Parse,
+module Glam.Parser (
+    module Glam.Parser,
     module Text.Megaparsec,
     module Control.Monad.Combinators.Expr
 ) where
@@ -52,7 +52,8 @@ keyword s = label (show s) $ try $ lexeme $ string s <* notFollowedBy (satisfy i
 instance {-# OVERLAPPING #-} a ~ String => IsString (Parser a) where
     fromString = keyword
 
-semicolon, comma, equal, dot, lambda :: Parser String
+colon, semicolon, comma, equal, dot, lambda :: Parser String
+colon     = symbol ":"
 semicolon = symbol ";"
 comma     = symbol ","
 equal     = symbol "="
