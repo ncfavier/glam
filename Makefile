@@ -12,7 +12,12 @@ $(dist)/all.js: FORCE
 	cabal build --ghcjs exe:glam
 
 www/glam.min.js: $(dist)/all.js $(dist)/all.js.externs
-	closure-compiler -O advanced -W QUIET --jscomp_off undefinedVars --externs $(dist)/all.js.externs --js $(dist)/all.js --js_output_file $@
+ifdef dev
+	cp $< $@
+else
+	closure-compiler -O advanced -W QUIET --jscomp_off undefinedVars \
+		--externs $(dist)/all.js.externs --js $< --js_output_file $@
+endif
 
 www/index.html: www/index.template.html $(example)
 	example=$$(< $(example)) envsubst '$$example' < $< > $@

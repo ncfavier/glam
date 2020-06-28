@@ -1,8 +1,11 @@
-- line folds
-- type annotations/checking/inference
+- type definitions/annotations/checking/inference
+- optional curlies and semicolons (haskell-style layout)
 - base types (integers, booleans, ...) and operations
 - infix operators
+- idiom brackets or something
+- auto (un)box/next/prev? (type safety?)
 - standard library (streams, ...)
-- better interaction with streams
+- pattern matching
+- better user interaction with streams
 - call-by-need?
 - write documentation

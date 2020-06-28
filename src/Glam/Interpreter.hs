@@ -11,6 +11,9 @@ import           Control.Monad.Writer
 import Glam.Term
 import Glam.Parse
 
+data Statement = Define Var Term | Print Term
+    deriving (Eq, Show)
+
 type GlamState = Subst
 
 type MonadGlam = MonadState GlamState
@@ -27,10 +30,11 @@ eval t = (`substitute` t) <$> get
 getDefined :: MonadGlam m => m [Var]
 getDefined = gets Map.keys
 
-runFile :: MonadGlam m => String -> String -> m (Either String [String])
-runFile name contents = runExceptT $ do
-    cs <- liftEither $ runP file name contents
-    execWriterT $ forM cs runStatement
+statement :: Parser Statement
+statement = uncurry Define <$> definition <|> Print <$> term
+
+file :: Parser [Statement]
+file = whitespace *> many (lineFolded statement) <* eof
 
 runStatement :: (MonadGlam m, MonadWriter [String] m) => Statement -> m ()
 runStatement (Define x t) = do
@@ -39,3 +43,8 @@ runStatement (Define x t) = do
 runStatement (Print t) = do
     t' <- eval t
     tell [show (normalise t')]
+
+runFile :: MonadGlam m => String -> String -> m (Either String [String])
+runFile name contents = runExceptT $ do
+    cs <- liftEither $ parse file name contents
+    execWriterT $ forM cs runStatement

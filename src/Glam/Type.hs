@@ -1,7 +1,10 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Glam.Type where
 
 import           Data.Set (Set)
 import qualified Data.Set as Set
+
+import Glam.Parse
 
 type TVar = String
 
@@ -87,3 +90,20 @@ instance Show Type where
         showString "#" . showsPrec modPrec t
     showsPrec d (TFix x t)   = showParen (d > 0) $
         showString "Fix " . showString x . showString ". " . shows t
+
+-- Parsing
+
+typeVariable :: Parser TVar
+typeVariable = mkIdentifier ["Fix"]
+
+type_ :: Parser Type
+type_ = tfix <|> makeExprParser base ops <?> "type"
+    where
+    tfix = flip (foldr TFix) <$ "Fix" <*> some typeVariable <* dot <*> type_
+    base = TVar <$> typeVariable <|> One <$ symbol "1" <|> parens type_
+    modality = Later <$ symbol ">" <|> Constant <$ symbol "#"
+    ops = [ [Prefix (foldr1 (.) <$> some modality)]
+          , [binary "*" (:*:)]
+          , [binary "+" (:+:)]
+          , [binary "->" (:->:)] ]
+    binary w f = InfixR (f <$ symbol w)

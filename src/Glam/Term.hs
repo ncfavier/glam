@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Glam.Term where
 
 import           Control.Monad (replicateM)
@@ -7,6 +8,8 @@ import qualified Data.Map as Map
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Numeric.Natural
+
+import Glam.Parse
 
 type Var = String
 
@@ -134,7 +137,7 @@ fix_ x t = Fix (Abs x t)
 -- Small-step operational semantics for the calculus: performs a single reduction step, if possible.
 reduce :: Term -> Maybe Term
 -- Reduction rules
-reduce (Abs x s :$: t)                        = Just (substitute1 x t s)
+reduce (Abs x t :$: s)                        = Just (substitute1 x s t)
 reduce (Let (Subst s t))                      = Just (substitute s t)
 reduce (Fst (Pair t1 _))                      = Just t1
 reduce (Snd (Pair _ t2))                      = Just t2
@@ -235,3 +238,44 @@ instance Show Term where
     showsPrec d (Box d') = showDelayed "box" d d'
     showsPrec d (Unbox t) = showParen (d > appPrec) $
         showString "unbox " . showsPrec (appPrec + 1) t
+
+-- Parsing
+
+variable :: Parser Var
+variable = mkIdentifier
+    ["succ", "fst", "snd", "abort", "left", "right", "case", "of", "let",
+     "fold", "unfold", "fix", "next", "prev", "box", "unbox", "in"]
+
+term :: Parser Term
+term = choice [abs_, fix__, case_, letIn, try prevIn, try boxIn, makeExprParser base ops] <?> "term"
+    where
+    abs_ = flip (foldr Abs) <$ lambda <*> some variable <* dot <*> term
+    fix__ = flip (foldr fix_) <$ "fix" <*> some variable <* dot <*> term
+    case_ = do
+        "case"; t <- term; "of"
+        braces $ do
+            "left"; x1 <- variable; dot; t1 <- term
+            semicolon
+            "right"; x2 <- variable; dot; t2 <- term
+            return $ Case t (Abs x1 t1) (Abs x2 t2)
+    delayed = Subst <$> braces subst <* "in" <*> term
+    letIn = Let <$ "let" <*> delayed
+    prevIn = Prev <$ "prev" <*> delayed
+    boxIn = Box <$ "box" <*> delayed
+    base = choice [Var <$> variable, natToTerm <$> number, try $ parens (pure Unit), try $ parens term, parens $ Pair <$> term <* comma <*> term]
+    unaries = [("succ", Succ), ("fst", Fst), ("snd", Snd), ("abort", Abort), ("left", InL), ("right", InR),
+               ("fold", Fold), ("unfold", Unfold), ("next", Next), ("prev", prev), ("box", box), ("unbox", Unbox)]
+    ops = [ InfixL (pure (:$:)) : map unary unaries
+          , [ InfixL ((:<*>:)        <$ symbol "<*>")
+            , InfixL ((:<*>:) . Next <$ symbol "<$>") ] ]
+    unary (w, f) = Prefix (f <$ hidden (keyword w))
+
+definition :: Parser (Var, Term)
+definition = try (mkDef <$> variable <*> many variable <* equal) <*> term
+    where
+    mkDef x ys t = autoFix x (foldr Abs t ys)
+    autoFix x t | x `freeIn` t = (x, Fix (Abs x t))
+                | otherwise = (x, t)
+
+subst :: Parser Subst
+subst = Map.fromList <$> definition `sepBy` semicolon
