@@ -45,7 +45,7 @@ prompt = "> "
 
 greet = putStrLn "glam, the guarded λ-calculus (https://git.monade.li/glam)"
 
-main = runGlam $ do
+main = runGlamT $ do
     (interactive, fs) <- liftIO parseArgs
     forM_ fs $ \f -> do
         let (name, contents) | f == "-"  = ("", getContents)

@@ -21,8 +21,11 @@ type MonadGlam = MonadState GlamState
 initialGlamState :: GlamState
 initialGlamState = Map.empty
 
-runGlam :: Monad m => StateT GlamState m a -> m a
-runGlam a = evalStateT a initialGlamState
+runGlamT :: Monad m => StateT GlamState m a -> m a
+runGlamT a = evalStateT a initialGlamState
+
+runGlam :: State GlamState a -> a
+runGlam a = evalState a initialGlamState
 
 eval :: MonadGlam m => Term -> m Term
 eval t = (`substitute` t) <$> get
