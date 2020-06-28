@@ -54,7 +54,7 @@ hd     s = hdg (unbox s)
 tl     s = box (prev (tlg (unbox s)))
 
 -- The stream of natural numbers
-natsg = consg 0 (next (mapg (\n. succ n)) <*> natsg)
+natsg = consg 0 (mapg (\n. succ n) <$> natsg)
 nats  = box natsg
 
 -- Print the third natural number, i.e. 2

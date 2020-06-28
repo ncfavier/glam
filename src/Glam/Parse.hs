@@ -90,7 +90,7 @@ term = choice [abs_, fix__, case_, letIn, try prevIn, try boxIn, makeExprParser 
     unaries = [("succ", Succ), ("fst", Fst), ("snd", Snd), ("abort", Abort), ("left", InL), ("right", InR),
                ("fold", Fold), ("unfold", Unfold), ("next", Next), ("prev", prev), ("box", box), ("unbox", Unbox)]
     ops = [ InfixL (pure (:$:)) : map unary unaries
-          , [InfixL ((:<*>:) <$ symbol "<*>")] ]
+          , [InfixL ((:<*>:) <$ symbol "<*>"), InfixL ((:<*>:) . Next <$ symbol "<$>")] ]
     unary (w, f) = Prefix (f <$ hidden (keyword w))
 
 def :: Parser (Var, Term)

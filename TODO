@@ -1,6 +1,8 @@
 - line folds
 - type annotations/checking/inference
 - base types (integers, booleans, ...) and operations
+- infix operators
 - standard library (streams, ...)
 - better interaction with streams
 - call-by-need?
+- write documentation
