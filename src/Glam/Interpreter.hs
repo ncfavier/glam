@@ -29,7 +29,9 @@ runGlam :: State GlamState a -> a
 runGlam a = evalState a initialGlamState
 
 eval :: MonadGlam m => Term -> m Term
-eval t = (`substitute` t) <$> get
+eval t = do
+    s <- get
+    return (normalise (substitute s t))
 
 getDefined :: MonadGlam m => m [Var]
 getDefined = gets Map.keys
@@ -52,7 +54,7 @@ runStatement (Binding x t) = do
     modify $ Map.insert x t'
 runStatement (Eval t) = do
     t' <- eval t
-    tell [show (normalise t')]
+    tell [show t']
 
 runFile :: MonadGlam m => String -> String -> m (Either String [String])
 runFile name contents = runExceptT $ do

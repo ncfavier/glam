@@ -1,24 +1,24 @@
 -- Guarded recursive streams
 consG x s = fold (x, s)
-hdG     s = fst unfold s
-tlG     s = snd unfold s
+headG   s = fst unfold s
+tailG   s = snd unfold s
 
-zipWithG f = let { go s1 s2 = consG (f (hdG s1) (hdG s2))
-                                    (go <*> tlG s1 <*> tlG s2) }
+zipWithG f = let { go s1 s2 = consG (f (headG s1) (headG s2))
+                                    (go <*> tailG s1 <*> tailG s2) }
              in go
 
 -- Coinductive streams
 cons x s = box (consG x (next unbox s))
-hd     s = hdG unbox s
-tl     s = box prev (tlG unbox s)
+head   s = headG unbox s
+tail   s = box prev (tailG unbox s)
 
 -- The Fibonacci sequence
-fibG = consG 0 ((\f. consG 1 (zipWithG (\x y. x + y) f <$> tlG f)) <$> fibG)
+fibG = consG 0 ((\f. consG 1 (zipWithG (\x y. x + y) f <$> tailG f)) <$> fibG)
 fib  = box fibG
 
 -- Print the first five Fibonacci numbers
-hd fib
-hd (tl fib)
-hd (tl (tl fib))
-hd (tl (tl (tl fib)))
-hd (tl (tl (tl (tl fib))))
+head fib
+head (tail fib)
+head (tail (tail fib))
+head (tail (tail (tail fib)))
+head (tail (tail (tail (tail fib))))
