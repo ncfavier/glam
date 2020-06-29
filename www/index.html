@@ -39,7 +39,7 @@
         <script src="glam.min.js" defer></script>
     </head>
     <body>
-        <h1><a id=glam href="https://git.monade.li/glam">glam</a></span>. The guarded λ-calculus</h1>
+        <h1><a id=glam href="https://git.monade.li/glam">glam</a>. The guarded λ-calculus</h1>
         <p>
             Based on Ranald Clouston, Aleš Bizjak, Hans Bugge Grathwohl and Lars Birkedal's <a href="https://arxiv.org/abs/1606.09455">paper</a>.
         </p>
@@ -47,7 +47,6 @@
 -- Guarded recursive streams
 consG x s = fold (x, s)
 hdG     s = fst unfold s
-tlG : StrG -> >StrG
 tlG     s = snd unfold s
 
 mapG f = let { go s = consG (f (hdG s)) (go <*> tlG s) }
@@ -63,7 +62,7 @@ hd     s = hdG unbox s
 tl     s = box prev (tlG unbox s)
 
 -- The Fibonacci sequence
-fibG = consG 0 ((\f. consG 1 (zipWithG (\x y. x + y) <$> fibG <*> tlG f)) <$> fibG)
+fibG = consG 0 ((\f. consG 1 (zipWithG (\x y. x + y) f <$> tlG f)) <$> fibG)
 fib  = box fibG
 
 -- Print the first five Fibonacci numbers
@@ -91,6 +90,7 @@ hd (tl (tl (tl (tl fib))))
                 output.innerHTML = eval_(editor.getValue());
             };
 
+            // Called from Haskell
             const init = f => {
                 eval_ = f;
                 update();

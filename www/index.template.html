@@ -39,7 +39,7 @@
         <script src="$glamjs" defer></script>
     </head>
     <body>
-        <h1><a id=glam href="https://git.monade.li/glam">glam</a></span>. The guarded λ-calculus</h1>
+        <h1><a id=glam href="https://git.monade.li/glam">glam</a>. The guarded λ-calculus</h1>
         <p>
             Based on Ranald Clouston, Aleš Bizjak, Hans Bugge Grathwohl and Lars Birkedal's <a href="https://arxiv.org/abs/1606.09455">paper</a>.
         </p>
@@ -64,6 +64,7 @@ $example
                 output.innerHTML = eval_(editor.getValue());
             };
 
+            // Called from Haskell
             const init = f => {
                 eval_ = f;
                 update();
