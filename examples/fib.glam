@@ -3,9 +3,6 @@ consG x s = fold (x, s)
 hdG     s = fst unfold s
 tlG     s = snd unfold s
 
-mapG f = let { go s = consG (f (hdG s)) (go <*> tlG s) }
-         in go
-
 zipWithG f = let { go s1 s2 = consG (f (hdG s1) (hdG s2))
                                     (go <*> tlG s1 <*> tlG s2) }
              in go
