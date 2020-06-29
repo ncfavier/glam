@@ -45,27 +45,28 @@
         </p>
 <textarea id=input>
 -- Guarded recursive streams
-consg x s = fold (x, s)
-hdg     s = fst (unfold s)
-tlg     s = snd (unfold s)
+consG x s = fold (x, s)
+hdG     s = fst unfold s
+tlG     s = snd unfold s
 
-mapg f = let { m s = consg (f (hdg s)) (m <*> tlg s) }
-         in m
+mapG f = let { go s = consG (f (hdG s)) (go <*> tlG s) }
+         in go
 
 -- Coinductive streams
-cons x s = box (consg x (next (unbox s)))
-hd     s = hdg (unbox s)
-tl     s = box (prev (tlg (unbox s)))
+cons x s = box (consG x (next unbox s))
+hd     s = hdG unbox s
+tl     s = box prev (tlG unbox s)
 
 -- The stream of natural numbers
-natsg = consg 0 (mapg (\n. succ n) <$> natsg)
-nats  = box natsg
+natsG = consG 0 (mapG (\n. succ n) <$> natsG)
+nats  = box natsG
 
 -- Print the third natural number, i.e. 2
 hd (tl (tl nats))
 </textarea>
         <pre id=output>...</pre>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/codemirror.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/addon/edit/matchbrackets.min.js"></script>
         <script src="glam_syntax.js"></script>
         <script>
             const editor = CodeMirror.fromTextArea(document.getElementById("input"), {

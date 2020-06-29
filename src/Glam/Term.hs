@@ -262,13 +262,17 @@ term = choice [abs_, fix__, case_, letIn, try prevIn, try boxIn, makeExprParser 
     letIn = Let <$ "let" <*> delayed
     prevIn = Prev <$ "prev" <*> delayed
     boxIn = Box <$ "box" <*> delayed
-    base = choice [Var <$> variable, natToTerm <$> number, try $ parens (pure Unit), try $ parens term, parens $ Pair <$> term <* comma <*> term]
-    unaries = [("succ", Succ), ("fst", Fst), ("snd", Snd), ("abort", Abort), ("left", InL), ("right", InR),
-               ("fold", Fold), ("unfold", Unfold), ("next", Next), ("prev", prev), ("box", box), ("unbox", Unbox)]
-    ops = [ InfixL (pure (:$:)) : map unary unaries
+    base =  Var <$> variable
+        <|> natToTerm <$> number
+        <|> parens (try (Pair <$> term <* comma) <*> term <|> term <|> pure Unit)
+    unaries = [("succ", Succ), ("fst", Fst), ("snd", Snd), ("abort", Abort),
+               ("left", InL), ("right", InR), ("fold", Fold), ("unfold", Unfold),
+               ("next", Next), ("prev", prev), ("box", box), ("unbox", Unbox)]
+    unary = choice [f <$ hidden (keyword w) | (w, f) <- unaries]
+    ops = [ [ InfixL (pure (:$:))
+            , Prefix (foldr1 (.) <$> some unary) ]
           , [ InfixL ((:<*>:)        <$ symbol "<*>")
             , InfixL ((:<*>:) . Next <$ symbol "<$>") ] ]
-    unary (w, f) = Prefix (f <$ hidden (keyword w))
 
 binding :: Parser (Var, Term)
 binding = try (mkBinding <$> variable <*> many variable <* equal) <*> term
