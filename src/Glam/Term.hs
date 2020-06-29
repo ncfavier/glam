@@ -25,7 +25,7 @@ data Term =
     -- Products
     | Unit | Pair Term Term | Fst Term | Snd Term
     -- Sums
-    | Abort Term | InL Term | InR Term | Case Term Term Term
+    | InL Term | InR Term | Case Term Term Term
     -- Functions
     | Abs Var Term | Term :$: Term
     -- Let-bindings
@@ -50,7 +50,6 @@ freeVariables Unit           = Set.empty
 freeVariables (Pair t1 t2)   = freeVariables t1 <> freeVariables t2
 freeVariables (Fst t)        = freeVariables t
 freeVariables (Snd t)        = freeVariables t
-freeVariables (Abort t)      = freeVariables t
 freeVariables (InL t)        = freeVariables t
 freeVariables (InR t)        = freeVariables t
 freeVariables (Case t t1 t2) = freeVariables t <> freeVariables t1 <> freeVariables t2
@@ -104,7 +103,6 @@ substitute _ Unit           = Unit
 substitute s (Pair t1 t2)   = Pair (substitute s t1) (substitute s t2)
 substitute s (Fst t)        = Fst (substitute s t)
 substitute s (Snd t)        = Snd (substitute s t)
-substitute s (Abort t)      = Abort (substitute s t)
 substitute s (InL t)        = InL (substitute s t)
 substitute s (InR t)        = InR (substitute s t)
 substitute s (Case t t1 t2) = Case (substitute s t) (substitute s t1) (substitute s t2)
@@ -197,8 +195,6 @@ instance Show Term where
         showString "fst " . showsPrec (appPrec + 1) t
     showsPrec d (Snd t) = showParen (d > appPrec) $
         showString "snd " . showsPrec (appPrec + 1) t
-    showsPrec d (Abort t) = showParen (d > appPrec) $
-        showString "abort " . showsPrec (appPrec + 1) t
     showsPrec d (InL t) = showParen (d > appPrec) $
         showString "left " . showsPrec (appPrec + 1) t
     showsPrec d (InR t) = showParen (d > appPrec) $
@@ -234,8 +230,8 @@ instance Show Term where
 
 variable :: Parser Var
 variable = mkIdentifier
-    ["fst", "snd", "abort", "left", "right", "case", "of", "let",
-     "fold", "unfold", "fix", "next", "prev", "box", "unbox", "in"]
+    ["fst", "snd", "left", "right", "case", "of", "let", "fold", "unfold",
+     "fix", "next", "prev", "box", "unbox", "in"]
 
 term :: Parser Term
 term = choice [abs_, fix__, case_, letIn, try prevIn, try boxIn, makeExprParser base ops] <?> "term"
@@ -256,9 +252,9 @@ term = choice [abs_, fix__, case_, letIn, try prevIn, try boxIn, makeExprParser 
     base =  Var <$> variable
         <|> Int <$> number
         <|> parens (try (Pair <$> term <* comma) <*> term <|> term <|> pure Unit)
-    unaries = [("fst", Fst), ("snd", Snd), ("abort", Abort),
-               ("left", InL), ("right", InR), ("fold", Fold), ("unfold", Unfold),
-               ("next", Next), ("prev", prev), ("box", box), ("unbox", Unbox)]
+    unaries = [("fst", Fst), ("snd", Snd), ("left", InL), ("right", InR),
+               ("fold", Fold), ("unfold", Unfold), ("next", Next), ("prev", prev),
+               ("box", box), ("unbox", Unbox)]
     unary = choice [f <$ hidden (keyword w) | (w, f) <- unaries]
     ops = [ [ InfixL (pure (:$:))
             , Prefix (foldr1 (.) <$> some unary) ]

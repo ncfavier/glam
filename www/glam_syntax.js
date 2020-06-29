@@ -189,7 +189,7 @@ CodeMirror.defineMode("glam", function(_config, modeConfig) {
       "=", "\\", "λ", ".", ":", "->", ">", "#", "+", "*");
 
     setType("builtin")(
-      "next", "unbox", "fold", "unfold", "fst", "snd", "abort", "left", "right");
+      "next", "unbox", "fold", "unfold", "fst", "snd", "left", "right");
 
     setType("builtin")(
       "<*>", "<$>");

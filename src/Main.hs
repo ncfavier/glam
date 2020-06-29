@@ -32,7 +32,7 @@ parseArgs = do
 
 comp = completeWord Nothing " \t" $ \p -> do
     defined <- getDefined
-    let words = defined ++ ["fst", "snd", "abort", "left", "right", "fold", "unfold", "box", "unbox", "next", "prev"]
+    let words = defined ++ ["fst", "snd", "left", "right", "fold", "unfold", "box", "unbox", "next", "prev"]
     return [simpleCompletion w | w <- words, p `isPrefixOf` w]
 
 settings = Settings { complete = comp
