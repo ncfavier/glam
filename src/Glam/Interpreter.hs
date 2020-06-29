@@ -12,7 +12,7 @@ import Glam.Term
 import Glam.Type
 import Glam.Parser
 
-data Statement = Signature Var Type | Binding Var Term | Output Term
+data Statement = Signature Var Type | Binding Var Term | Eval Term
     deriving (Eq, Show)
 
 type GlamState = Subst
@@ -40,7 +40,7 @@ signature = try ((,) <$> variable <* colon) <*> type_
 statement :: Parser Statement
 statement =  uncurry Signature <$> signature
          <|> uncurry Binding   <$> binding
-         <|>         Output    <$> term
+         <|>         Eval      <$> term
 
 file :: Parser [Statement]
 file = whitespace *> many (lineFolded statement) <* eof
@@ -50,7 +50,7 @@ runStatement (Signature _ _) = return ()
 runStatement (Binding x t) = do
     t' <- eval t
     modify $ Map.insert x t'
-runStatement (Output t) = do
+runStatement (Eval t) = do
     t' <- eval t
     tell [show (normalise t')]
 

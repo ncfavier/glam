@@ -24,4 +24,4 @@ www/glam.min.js: $(dist)/all.js $(dist)/all.js.externs
 		--externs $(dist)/all.js.externs --js $< --js_output_file $@
 
 www/index.html: www/index.template.html FORCE
-	example=$$(< $(example)) envsubst '$$example $$glamjs' < $< > $@
+	nats=$$(< examples/nats.glam) fib=$$(< examples/fib.glam) envsubst '$$nats$$fib$$glamjs' < $< > $@

@@ -23,8 +23,17 @@
                 color: #30a;
             }
 
+            button {
+                padding: 5px 10px;
+                margin-right: 5px;
+                font-size: initial;
+                font-family: serif;
+                background: none;
+                border: 1px solid #30a;
+            }
+
             .CodeMirror, #output {
-                border: 1px solid #ddd !important;
+                border: 1px solid #ddd;
             }
 
             .CodeMirror {
@@ -37,39 +46,48 @@
             }
         </style>
         <script src="$glamjs" defer></script>
+        <script id=nats-txt type="text/plain">$nats</script>
+        <script id=fib-txt type="text/plain">$fib</script>
     </head>
     <body>
         <h1><a id=glam href="https://git.monade.li/glam">glam</a>. The guarded λ-calculus</h1>
+        <p>Based on Ranald Clouston, Aleš Bizjak, Hans Bugge Grathwohl and Lars Birkedal's <a href="https://arxiv.org/abs/1606.09455">paper</a>.</p>
         <p>
-            Based on Ranald Clouston, Aleš Bizjak, Hans Bugge Grathwohl and Lars Birkedal's <a href="https://arxiv.org/abs/1606.09455">paper</a>.
+            Examples:
+            <button id=nats class=example>Natural numbers</button>
+            <button id=fib class=example>Fibonacci sequence</button>
         </p>
-<textarea id=input>
-$example
-</textarea>
-        <pre id=output>...</pre>
+        <textarea id=input></textarea>
+        <p><button id=eval>Evaluate</button>
+        <pre id=output style="display: none;"><pre>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/codemirror.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/addon/edit/matchbrackets.min.js"></script>
         <script src="glam_syntax.js"></script>
         <script>
-            const editor = CodeMirror.fromTextArea(document.getElementById("input"), {
+            const editor = CodeMirror.fromTextArea(document.querySelector('#input'), {
                 lineNumbers: true,
                 matchBrackets: true,
                 theme: "idea",
                 mode: "glam"
             });
 
-            const output = document.getElementById('output');
+            const output = document.querySelector('#output');
 
             const update = () => {
                 output.innerHTML = eval_(editor.getValue());
+                output.style.display = '';
             };
 
+            document.querySelector('#eval').addEventListener('click', update);
+
+            document.querySelectorAll('.example').forEach(e =>
+                e.addEventListener('click', () =>
+                    editor.setValue(document.getElementById(e.id + '-txt').innerHTML)
+                )
+            );
+
             // Called from Haskell
-            const init = f => {
-                eval_ = f;
-                update();
-                editor.on('change', update);
-            };
+            const init = f => eval_ = f;
         </script>
     </body>
 </html>
