@@ -47,22 +47,31 @@
 -- Guarded recursive streams
 consG x s = fold (x, s)
 hdG     s = fst unfold s
+tlG : StrG -> >StrG
 tlG     s = snd unfold s
 
 mapG f = let { go s = consG (f (hdG s)) (go <*> tlG s) }
          in go
+
+zipWithG f = let { go s1 s2 = consG (f (hdG s1) (hdG s2))
+                                    (go <*> tlG s1 <*> tlG s2) }
+             in go
 
 -- Coinductive streams
 cons x s = box (consG x (next unbox s))
 hd     s = hdG unbox s
 tl     s = box prev (tlG unbox s)
 
--- The stream of natural numbers
-natsG = consG 0 (mapG (\n. succ n) <$> natsG)
-nats  = box natsG
+-- The Fibonacci sequence
+fibG = consG 0 ((\f. consG 1 (zipWithG (\x y. x + y) <$> fibG <*> tlG f)) <$> fibG)
+fib  = box fibG
 
--- Print the third natural number, i.e. 2
-hd (tl (tl nats))
+-- Print the first five Fibonacci numbers
+hd fib
+hd (tl fib)
+hd (tl (tl fib))
+hd (tl (tl (tl fib)))
+hd (tl (tl (tl (tl fib))))
 </textarea>
         <pre id=output>...</pre>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/codemirror.min.js"></script>

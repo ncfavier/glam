@@ -1,6 +1,6 @@
 version = 0.0
 dist = dist-newstyle/build/x86_64-linux/ghcjs-8.6.0.1/glam-$(version)/x/glam/build/glam/glam.jsexe
-example = examples/nats.glam
+example = examples/fib.glam
 ifdef dev
 	export glamjs = glam.js
 else

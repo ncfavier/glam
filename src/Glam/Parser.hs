@@ -13,7 +13,6 @@ import qualified Data.Map as Map (fromList)
 import           Data.Char
 import           Data.String
 import           Data.Void
-import           Numeric.Natural
 import           Text.Megaparsec hiding (State, parse)
 import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
@@ -68,7 +67,7 @@ lineFolded p = (put . Just =<< getSourcePos) *> p
 word :: Parser String
 word = (:) <$> alpha <*> takeWhileP Nothing isRest <?> "word"
 
-number :: Parser Natural
+number :: Parser Integer
 number = lexeme L.decimal
 
 mkIdentifier :: [String] -> Parser String

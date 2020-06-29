@@ -7,7 +7,6 @@ import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Data.Set (Set)
 import qualified Data.Set as Set
-import           Numeric.Natural
 
 import Glam.Parser
 
@@ -21,8 +20,8 @@ infixl :$:
 data Term =
     -- Variables
       Var Var
-    -- Natural numbers
-    | Zero | Succ Term
+    -- Integers
+    | Int Integer | Plus Term Term
     -- Products
     | Unit | Pair Term Term | Fst Term | Snd Term
     -- Sums
@@ -45,8 +44,8 @@ data Delayed = Subst Subst Term deriving Eq
 
 freeVariables :: Term -> Set Var
 freeVariables (Var x)        = Set.singleton x
-freeVariables Zero           = Set.empty
-freeVariables (Succ t)       = freeVariables t
+freeVariables (Int _)        = Set.empty
+freeVariables (Plus t1 t2)   = freeVariables t1 <> freeVariables t2
 freeVariables Unit           = Set.empty
 freeVariables (Pair t1 t2)   = freeVariables t1 <> freeVariables t2
 freeVariables (Fst t)        = freeVariables t
@@ -99,8 +98,8 @@ avoidCaptureDelayed vs d@(Subst s t)
 -- Capture-avoiding substitution.
 substitute :: Subst -> Term -> Term
 substitute s (Var x)        = Map.findWithDefault (Var x) x s
-substitute _ Zero           = Zero
-substitute s (Succ t)       = Succ (substitute s t)
+substitute _ (Int i)        = Int i
+substitute s (Plus t1 t2)   = Plus (substitute s t1) (substitute s t2)
 substitute _ Unit           = Unit
 substitute s (Pair t1 t2)   = Pair (substitute s t1) (substitute s t2)
 substitute s (Fst t)        = Fst (substitute s t)
@@ -139,6 +138,7 @@ reduce :: Term -> Maybe Term
 -- Reduction rules
 reduce (Abs x t :$: s)                        = Just (substitute1 x s t)
 reduce (Let (Subst s t))                      = Just (substitute s t)
+reduce (Int a `Plus` Int b)                   = Just (Int (a + b))
 reduce (Fst (Pair t1 _))                      = Just t1
 reduce (Snd (Pair _ t2))                      = Just t2
 reduce (Case (InL t) (Abs x1 t1) _)           = Just (substitute1 x1 t t1)
@@ -151,7 +151,8 @@ reduce (Prev (Subst s (Next t))) | Map.null s = Just t
 reduce (Prev (Subst s t)) | not (Map.null s)  = Just (Prev (Subst Map.empty (substitute s t)))
 -- Context rules (weak call-by-name evaluation)
 reduce (t1 :$: t2)        | Just t1' <- reduce t1 = Just (t1' :$: t2)
-reduce (Succ t)           | Just t' <- reduce t   = Just (Succ t')
+reduce (Plus t1 t2)       | Just t1' <- reduce t1 = Just (Plus t1' t2)
+                          | Just t2' <- reduce t2 = Just (Plus t1 t2')
 reduce (Fst t)            | Just t' <- reduce t   = Just (Fst t')
 reduce (Snd t)            | Just t' <- reduce t   = Just (Snd t')
 reduce (Case t t1 t2)     | Just t' <- reduce t   = Just (Case t' t1 t2)
@@ -171,15 +172,6 @@ reduction t = t:maybe [] reduction (reduce t)
 normalise :: Term -> Term
 normalise = last . reduction
 
-termToNat :: Term -> Maybe Natural
-termToNat Zero     = Just 0
-termToNat (Succ t) = succ <$> termToNat t
-termToNat _        = Nothing
-
-natToTerm :: Natural -> Term
-natToTerm 0 = Zero
-natToTerm n = Succ (natToTerm (pred n))
-
 -- Printing
 
 showSubst s = intercalate "; " [v ++ " = " ++ show t | (v, t) <- Map.assocs s]
@@ -194,11 +186,10 @@ appPrec = 10
 
 instance Show Term where
     showsPrec _ (Var x) = showString x
-    showsPrec _ Zero = showString "0"
-    showsPrec d t@(Succ t')
-        | Just n <- termToNat t = shows n
-        | otherwise = showParen (d > appPrec) $
-            showString "succ " . showsPrec (appPrec + 1) t'
+    showsPrec _ (Int i) = shows i
+    showsPrec d (t1 `Plus` t2) = showParen (d > prec) $
+        showsPrec prec t1 . showString " + " . showsPrec (prec + 1) t2
+        where prec = 6
     showsPrec _ Unit = showString "()"
     showsPrec _ (Pair t1 t2) = showParen True $
         shows t1 . showString ", " . shows t2
@@ -243,7 +234,7 @@ instance Show Term where
 
 variable :: Parser Var
 variable = mkIdentifier
-    ["succ", "fst", "snd", "abort", "left", "right", "case", "of", "let",
+    ["fst", "snd", "abort", "left", "right", "case", "of", "let",
      "fold", "unfold", "fix", "next", "prev", "box", "unbox", "in"]
 
 term :: Parser Term
@@ -263,14 +254,15 @@ term = choice [abs_, fix__, case_, letIn, try prevIn, try boxIn, makeExprParser 
     prevIn = Prev <$ "prev" <*> delayed
     boxIn = Box <$ "box" <*> delayed
     base =  Var <$> variable
-        <|> natToTerm <$> number
+        <|> Int <$> number
         <|> parens (try (Pair <$> term <* comma) <*> term <|> term <|> pure Unit)
-    unaries = [("succ", Succ), ("fst", Fst), ("snd", Snd), ("abort", Abort),
+    unaries = [("fst", Fst), ("snd", Snd), ("abort", Abort),
                ("left", InL), ("right", InR), ("fold", Fold), ("unfold", Unfold),
                ("next", Next), ("prev", prev), ("box", box), ("unbox", Unbox)]
     unary = choice [f <$ hidden (keyword w) | (w, f) <- unaries]
     ops = [ [ InfixL (pure (:$:))
             , Prefix (foldr1 (.) <$> some unary) ]
+          , [ InfixL (Plus <$ symbol "+") ]
           , [ InfixL ((:<*>:)        <$ symbol "<*>")
             , InfixL ((:<*>:) . Next <$ symbol "<$>") ] ]
 
