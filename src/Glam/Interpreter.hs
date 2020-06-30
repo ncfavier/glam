@@ -31,7 +31,8 @@ runGlam a = evalState a initialGlamState
 eval :: MonadGlam m => Term -> m Term
 eval t = do
     s <- get
-    return (normalise (substitute s t))
+    let t' = desugar (Let (Subst s t))
+    return (normalise t')
 
 getDefined :: MonadGlam m => m [Var]
 getDefined = gets Map.keys

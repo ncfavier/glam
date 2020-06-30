@@ -1,4 +1,10 @@
 - type definitions/annotations/checking/inference
+- polymorphism?
+    - polymorphic types, monomorphic terms:
+        (<*>) : >(a -> b) -> >a -> >b
+        f = (<*>)                         => ambiguous type variable
+        f = (<*>) : >(A -> B) -> >A -> >B => OK
+    - HM polymorphism
 - implicit Fix in recursive type definitions (arguments have to be the same):
     type StrG A = A * >(StrG A)
     => type StrG A = Fix X. A * >X
