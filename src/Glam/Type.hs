@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 module Glam.Type where
 
 import           Data.Set (Set)

@@ -7,7 +7,7 @@ module Glam.Parser (
 ) where
 
 import           Control.Monad.Combinators.Expr
-import           Control.Monad.State
+import           Control.Monad.Reader
 import           Data.Bifunctor (first)
 import qualified Data.Map as Map (fromList)
 import           Data.Char
@@ -17,12 +17,12 @@ import           Text.Megaparsec hiding (State, parse)
 import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 
-type IndentState = Maybe SourcePos
+type IndentRef = Maybe SourcePos
 
-type Parser = StateT IndentState (Parsec Void String)
+type Parser = ReaderT IndentRef (Parsec Void String)
 
 parse :: Parser a -> String -> String -> Either String a
-parse p f s = first errorBundlePretty $ runParser (evalStateT p Nothing) f s
+parse p f s = first errorBundlePretty $ runParser (runReaderT p Nothing) f s
 
 whitespace :: Parser ()
 whitespace = L.space space1 (L.skipLineComment "--") (L.skipBlockComment "{-" "-}")
@@ -36,7 +36,7 @@ isRest c = c == '\'' || isDigit c || isAlpha c
 lexeme :: Parser a -> Parser a
 lexeme p = do
     SourcePos { sourceLine = curLine, sourceColumn = curColumn } <- getSourcePos
-    ref <- get
+    ref <- ask
     case ref of
         Just SourcePos { sourceLine = refLine, sourceColumn = refColumn }
             | curLine > refLine, curColumn <= refColumn ->
@@ -62,7 +62,9 @@ lambda    = symbol "λ" <|> symbol "\\"
 parens, braces, lineFolded :: Parser a -> Parser a
 parens       = between (symbol "(") (symbol ")")
 braces       = between (symbol "{") (symbol "}")
-lineFolded p = (put . Just =<< getSourcePos) *> p
+lineFolded p = do
+    pos <- getSourcePos
+    local (\_ -> Just pos) p
 
 word :: Parser String
 word = (:) <$> alpha <*> takeWhileP Nothing isRest <?> "word"

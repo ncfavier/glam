@@ -6,11 +6,12 @@
         <meta name=description content="glam, the guarded λ-calculus">
         <title>glam — The guarded λ-calculus</title>
         <link rel=icon href="favicon.ico">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/codemirror.min.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/theme/idea.min.css">
+        <link rel=stylesheet href="https://fonts.googleapis.com/css2?family=Source+Serif+Pro:wght@400;700&display=swap">
+        <link rel=stylesheet href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/codemirror.min.css">
+        <link rel=stylesheet href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/theme/idea.min.css">
         <style>
             body {
-                font-family: serif;
+                font-family: 'Source Serif Pro', serif;
                 padding: 20px 100px;
             }
 
@@ -26,9 +27,9 @@
             button {
                 padding: 5px 10px;
                 margin-right: 5px;
-                font-size: initial;
-                font-family: serif;
-                color: initial;
+                font-size: inherit;
+                font-family: inherit;
+                color: inherit;
                 background: none;
                 border: 1px solid #30a;
             }
@@ -100,8 +101,8 @@ head (tail (tail (tail (tail fib))))</script>
             <button id=fib class=example>Fibonacci sequence</button>
         </p>
         <textarea id=input></textarea>
-        <p><button id=eval>Evaluate</button>
-        <pre id=output style="display: none;"><pre>
+        <p><button id=eval>Evaluate</button></p>
+        <pre id=output style="display: none;"></pre>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/codemirror.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/addon/edit/matchbrackets.min.js"></script>
         <script src="glam_syntax.js"></script>

@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 module Glam.Term where
 
 import           Control.Monad (replicateM)
@@ -28,8 +27,6 @@ data Term =
     | InL Term | InR Term | Case Term Term Term
     -- Functions
     | Abs Var Term | Term :$: Term
-    -- Let-bindings
-    | Let Delayed
     -- Recursion operations
     | Fold Term | Unfold Term | Fix Term
     -- 'Later' operations
@@ -55,7 +52,6 @@ freeVariables (InR t)        = freeVariables t
 freeVariables (Case t t1 t2) = freeVariables t <> freeVariables t1 <> freeVariables t2
 freeVariables (Abs x t)      = Set.delete x (freeVariables t)
 freeVariables (t1 :$: t2)    = freeVariables t1 <> freeVariables t2
-freeVariables (Let d)        = freeVariablesDelayed d
 freeVariables (Fold t)       = freeVariables t
 freeVariables (Unfold t)     = freeVariables t
 freeVariables (Fix t)        = freeVariables t
@@ -109,7 +105,6 @@ substitute s (Case t t1 t2) = Case (substitute s t) (substitute s t1) (substitut
 substitute s t@Abs{}        = Abs x (substitute (Map.delete x s) t')
     where Abs x t' = avoidCapture (freeVariablesSubst s) t
 substitute s (t1 :$: t2)    = substitute s t1 :$: substitute s t2
-substitute s (Let d)        = Let (substituteDelayed s d)
 substitute s (Fold t)       = Fold (substitute s t)
 substitute s (Unfold t)     = Unfold (substitute s t)
 substitute s (Fix t)        = Fix (substitute s t)
@@ -125,6 +120,9 @@ substituteDelayed s d = Subst (substitute s <$> s') (substitute (s Map.\\ s') t)
 
 substitute1 x s = substitute (Map.singleton x s)
 
+doDelayed :: Delayed -> Term
+doDelayed (Subst s t) = substitute s t
+
 -- Identity substitutions for `prev` and `box`.
 prev t = Prev (Subst (Map.fromSet Var (freeVariables t)) t)
 box t = Box (Subst (Map.fromSet Var (freeVariables t)) t)
@@ -135,7 +133,6 @@ fix_ x t = Fix (Abs x t)
 reduce :: Term -> Maybe Term
 -- Reduction rules
 reduce (Abs x t :$: s)                        = Just (substitute1 x s t)
-reduce (Let (Subst s t))                      = Just (substitute s t)
 reduce (Int a `Plus` Int b)                   = Just (Int (a + b))
 reduce (Fst (Pair t1 _))                      = Just t1
 reduce (Snd (Pair _ t2))                      = Just t2
@@ -144,7 +141,7 @@ reduce (Case (InR t) _ (Abs x2 t2))           = Just (substitute1 x2 t t2)
 reduce (Unfold (Fold t))                      = Just t
 reduce t@(Fix (Abs x t'))                     = Just (substitute1 x (Next t) t')
 reduce (Next t1 :<*>: Next t2)                = Just (Next (t1 :$: t2))
-reduce (Unbox (Box (Subst s t)))              = Just (substitute s t)
+reduce (Unbox (Box d))                        = Just (doDelayed d)
 reduce (Prev (Subst s (Next t))) | Map.null s = Just t
 reduce (Prev (Subst s t)) | not (Map.null s)  = Just (Prev (Subst Map.empty (substitute s t)))
 -- Context rules (weak call-by-name evaluation)
@@ -209,7 +206,6 @@ instance Show Term where
         showChar '\\' . showString x . showString ". " . shows t
     showsPrec d (t1 :$: t2) = showParen (d > appPrec) $
         showsPrec appPrec t1 . showChar ' ' . showsPrec (appPrec + 1) t2
-    showsPrec d (Let d') = showDelayed "let" d d'
     showsPrec d (Fold t) = showParen (d > appPrec) $
         showString "fold " . showsPrec (appPrec + 1) t
     showsPrec d (Unfold t) = showParen (d > appPrec) $
@@ -246,7 +242,7 @@ term = choice [abs_, fix__, case_, letIn, try prevIn, try boxIn, makeExprParser 
             "right"; x2 <- variable; dot; t2 <- term
             return $ Case t (Abs x1 t1) (Abs x2 t2)
     delayed = Subst <$> braces subst <* "in" <*> term
-    letIn = Let <$ "let" <*> delayed
+    letIn = doDelayed <$ "let" <*> delayed
     prevIn = Prev <$ "prev" <*> delayed
     boxIn = Box <$ "box" <*> delayed
     base =  Var <$> variable
