@@ -47,7 +47,6 @@
                 white-space: pre-wrap;
             }
         </style>
-        <script src="glam.min.js" defer></script>
         <script id=nats-txt type="text/plain">-- Guarded recursive streams
 consG x s = fold (x, s)
 headG   s = fst unfold s
@@ -132,5 +131,6 @@ head (tail (tail (tail (tail fib))))</script>
             // Called from Haskell
             const init = f => eval_ = f;
         </script>
+        <script src="glam.min.js"></script>
     </body>
 </html>

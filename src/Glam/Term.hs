@@ -20,7 +20,7 @@ data Term =
     -- Variables
       Var Var
     -- Integers
-    | Int Integer | Plus Term Term
+    | Int Integer | Plus Term Term | Minus Term Term
     -- Products
     | Unit | Pair Term Term | Fst Term | Snd Term
     -- Sums
@@ -45,6 +45,7 @@ freeVariables :: Term -> Set Var
 freeVariables (Var x)        = Set.singleton x
 freeVariables (Int _)        = Set.empty
 freeVariables (Plus t1 t2)   = freeVariables t1 <> freeVariables t2
+freeVariables (Minus t1 t2)  = freeVariables t1 <> freeVariables t2
 freeVariables Unit           = Set.empty
 freeVariables (Pair t1 t2)   = freeVariables t1 <> freeVariables t2
 freeVariables (Fst t)        = freeVariables t
@@ -100,6 +101,7 @@ substitute :: Subst -> Term -> Term
 substitute s (Var x)        = Map.findWithDefault (Var x) x s
 substitute _ (Int i)        = Int i
 substitute s (Plus t1 t2)   = Plus (substitute s t1) (substitute s t2)
+substitute s (Minus t1 t2)  = Minus (substitute s t1) (substitute s t2)
 substitute _ Unit           = Unit
 substitute s (Pair t1 t2)   = Pair (substitute s t1) (substitute s t2)
 substitute s (Fst t)        = Fst (substitute s t)
@@ -138,6 +140,7 @@ desugar :: Term -> Term
 desugar (Var x)           = Var x
 desugar (Int i)           = Int i
 desugar (Plus t1 t2)      = Plus (desugar t1) (desugar t2)
+desugar (Minus t1 t2)     = Minus (desugar t1) (desugar t2)
 desugar Unit              = Unit
 desugar (Pair t1 t2)      = Pair (desugar t1) (desugar t2)
 desugar (Fst t)           = Fst (desugar t)
@@ -169,6 +172,7 @@ reduce :: Term -> Maybe Term
 reduce (Abs x t :$: s)                        = Just (substitute1 x s t)
 reduce (Let (Subst s t))                      = Just (substitute s t)
 reduce (Int a `Plus` Int b)                   = Just (Int (a + b))
+reduce (Int a `Minus` Int b)                  = Just (Int (a - b))
 reduce (Fst (Pair t1 _))                      = Just t1
 reduce (Snd (Pair _ t2))                      = Just t2
 reduce (Case (InL t) (Abs x1 t1) _)           = Just (substitute1 x1 t t1)
@@ -183,6 +187,8 @@ reduce (Prev (Subst s t)) | not (Map.null s)  = Just (Prev (Subst Map.empty (sub
 reduce (t1 :$: t2)        | Just t1' <- reduce t1 = Just (t1' :$: t2)
 reduce (Plus t1 t2)       | Just t1' <- reduce t1 = Just (Plus t1' t2)
                           | Just t2' <- reduce t2 = Just (Plus t1 t2')
+reduce (Minus t1 t2)      | Just t1' <- reduce t1 = Just (Minus t1' t2)
+                          | Just t2' <- reduce t2 = Just (Minus t1 t2')
 reduce (Fst t)            | Just t' <- reduce t   = Just (Fst t')
 reduce (Snd t)            | Just t' <- reduce t   = Just (Snd t')
 reduce (Case t t1 t2)     | Just t' <- reduce t   = Just (Case t' t1 t2)
@@ -213,13 +219,15 @@ pad "" = ""
 pad s = " " ++ s ++ " "
 
 appPrec = 10
+plusPrec = 6
 
 instance Show Term where
     showsPrec _ (Var x) = showString x
     showsPrec _ (Int i) = shows i
-    showsPrec d (t1 `Plus` t2) = showParen (d > prec) $
-        showsPrec prec t1 . showString " + " . showsPrec (prec + 1) t2
-        where prec = 6
+    showsPrec d (t1 `Plus` t2) = showParen (d > plusPrec) $
+        showsPrec plusPrec t1 . showString " + " . showsPrec (plusPrec + 1) t2
+    showsPrec d (t1 `Minus` t2) = showParen (d > plusPrec) $
+        showsPrec plusPrec t1 . showString " - " . showsPrec (plusPrec + 1) t2
     showsPrec _ Unit = showString "()"
     showsPrec _ (Pair t1 t2) = showParen True $
         shows t1 . showString ", " . shows t2
@@ -294,7 +302,7 @@ term = choice [abs_, fix__, case_, letIn, try prevIn, try boxIn, makeExprParser 
     unary = choice [f <$ hidden (keyword w) | (w, f) <- unaries]
     ops = [ [ InfixL (pure (:$:))
             , Prefix (foldr1 (.) <$> some unary) ]
-          , [ InfixL (Plus <$ symbol "+") ]
+          , [ InfixL (Plus <$ symbol "+"), InfixL (Minus <$ symbol "-") ]
           , [ InfixL ((:<*>:)        <$ symbol "<*>")
             , InfixL ((:<*>:) . Next <$ symbol "<$>") ] ]
 

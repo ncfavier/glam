@@ -11,7 +11,7 @@
 - optional curlies and semicolons (haskell-style layout)
 - base types (integers, booleans, ...) and operations
 - infix operators
-- idiom brackets or something
+- idiom brackets or !(notation) or something
 - auto (un)box/next/prev? (type safety?)
 - standard library (streams, ...)
 - cons/destructor generation, pattern matching
