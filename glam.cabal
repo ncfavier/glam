@@ -27,6 +27,7 @@ common glam
   default-language:    Haskell2010
   default-extensions:  ApplicativeDo, OverloadedStrings
   ghc-options:         -Wunused-matches
+  ghcjs-options:       -dedupe
 
 library
   import: glam
