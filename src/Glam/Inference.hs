@@ -11,10 +11,10 @@ import           Control.Monad.State
 import Glam.Term
 import Glam.Type
 
-data InferState = InferState { typeBindings :: Map TVar Type, freshTVars :: [TVar] }
+data InferState = InferState { typeBindings :: Map TVar Type, tvars :: [TVar] }
 
-initialInferState = InferState Map.empty vars
-    where vars = map ('\'':) $ [1..] >>= (`replicateM` ['a'..'z'])
+initialInferState = InferState Map.empty tvars
+    where tvars = map ('\'':) $ [1..] >>= (`replicateM` ['a'..'z'])
 
 type Environment = Map Var (Type, Bool)
 
@@ -27,9 +27,10 @@ expandTVar x a b = maybe a b . Map.lookup x =<< gets typeBindings
 
 freshTVar :: MonadInfer m => m Type
 freshTVar = do
-    ~(x:vars) <- gets freshTVars
-    modify $ \s -> s { freshTVars = vars }
+    ~(x:tvars) <- gets tvars
+    modify $ \s -> s { tvars }
     return (TVar x)
+freshTVars n = replicateM n freshTVar
 
 bindTVar :: MonadInfer m => TVar -> Type -> m ()
 bindTVar x t | x `freeInType` t = throwError $
@@ -85,44 +86,39 @@ Minus a b ?: ty = do
     ty ?= TInt
 Unit ?: ty = ty ?= One
 Pair a b ?: ty = do
-    ta <- freshTVar
-    tb <- freshTVar
+    ~[ta, tb] <- freshTVars 2
     ty ?= ta :*: tb
     a ?: ta
     b ?: tb
 Fst t ?: ty = do
-    b <- freshTVar
-    t ?: ty :*: b
+    tb <- freshTVar
+    t ?: ty :*: tb
 Snd t ?: ty = do
-    a <- freshTVar
-    t ?: a :*: ty
+    ta <- freshTVar
+    t ?: ta :*: ty
 Abort t ?: _ = t ?: Zero
 InL t ?: ty = do
-    a <- freshTVar
-    b <- freshTVar
-    ty ?= a :+: b
-    t ?: a
+    ~[ta, tb] <- freshTVars 2
+    ty ?= ta :+: tb
+    t ?: ta
 InR t ?: ty = do
-    a <- freshTVar
-    b <- freshTVar
-    ty ?= a :+: b
-    t ?: b
+    ~[ta, tb] <- freshTVars 2
+    ty ?= ta :+: tb
+    t ?: tb
 Case t (Abs x1 t1) (Abs x2 t2) ?: ty = do
-    a <- freshTVar
-    b <- freshTVar
-    t ?: a :+: b
+    ~[ta, tb] <- freshTVars 2
+    t ?: ta :+: tb
     constant <- isConstantTerm t
-    local (Map.insert x1 (a, constant)) (t1 ?: ty)
-    local (Map.insert x2 (b, constant)) (t2 ?: ty)
+    local (Map.insert x1 (ta, constant)) (t1 ?: ty)
+    local (Map.insert x2 (tb, constant)) (t2 ?: ty)
 Abs x t ?: ty = do
-    a <- freshTVar
-    b <- freshTVar
-    ty ?= a :->: b
-    local (Map.insert x (a, False)) (t ?: b)
+    ~[ta, tb] <- freshTVars 2
+    ty ?= ta :->: tb
+    local (Map.insert x (ta, False)) (t ?: tb)
 s :$: t ?: ty = do
-    a <- freshTVar
-    s ?: a :->: ty
-    t ?: a
+    ta <- freshTVar
+    s ?: ta :->: ty
+    t ?: ta
 Let (Subst s t) ?: ty = do
     e <- for s (liftA2 (liftA2 (,)) (?:?) isConstantTerm)
     local (Map.union e) (t ?: ty)
@@ -138,23 +134,22 @@ Unfold t ?: ty = do
         _ -> throwError $ "bad type for unfold: " ++ show ty'
 Fix (Abs x t) ?: ty = local (Map.insert x (Later ty, False)) (t ?: ty)
 Next t ?: ty = do
-    a <- freshTVar
-    ty ?= Later a
-    t ?: a
+    ta <- freshTVar
+    ty ?= Later ta
+    t ?: ta
 Prev t ?: ty = do
     t ?: Later ty
     constant <- isConstantTerm t
     unless constant $ throwError $ "non-constant term for prev: " ++ show t
-a :<*>: b ?: ty = do
-    ta <- freshTVar
-    tb <- freshTVar
+s :<*>: t ?: ty = do
+    ~[ta, tb] <- freshTVars 2
     ty ?= Later ta
-    b ?: Later tb
-    a ?: Later (tb :->: ta)
+    t ?: Later tb
+    s ?: Later (tb :->: ta)
 Box t ?: ty = do
-    a <- freshTVar
-    ty ?= Constant a
-    t ?: a
+    ta <- freshTVar
+    ty ?= Constant ta
+    t ?: ta
     constant <- isConstantTerm t
     unless constant $ throwError $ "non-constant term for box: " ++ show t
 Unbox t ?: ty = t ?: Constant ty
