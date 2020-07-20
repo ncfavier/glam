@@ -1,7 +1,12 @@
 -- Guarded recursive streams
+consG : Int -> >(Fix x. Int * >x) -> (Fix x. Int * >x)
 consG x s = fold (x, s)
-headG   s = fst unfold s
-tailG   s = snd unfold s
+
+headG : (Fix x. Int * >x) -> Int
+headG s = fst unfold s
+
+tailG : (Fix x. Int * >x) -> >(Fix x. Int * >x)
+tailG s = snd unfold s
 
 zipWithG f = let { go s1 s2 = consG (f (headG s1) (headG s2))
                                     (go <*> tailG s1 <*> tailG s2) }

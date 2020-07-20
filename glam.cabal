@@ -25,7 +25,7 @@ common glam
     parser-combinators
   hs-source-dirs:      src
   default-language:    Haskell2010
-  default-extensions:  ApplicativeDo, OverloadedStrings
+  default-extensions:  ApplicativeDo, OverloadedStrings, PostfixOperators, FlexibleContexts, ConstraintKinds
   ghc-options:         -Wunused-matches
   ghcjs-options:       -dedupe
 
@@ -36,6 +36,7 @@ library
     Glam.Type
     Glam.Parser
     Glam.Interpreter
+    Glam.Inference
 
 executable glam
   import: glam
@@ -53,3 +54,4 @@ executable glam
     Glam.Type
     Glam.Parser
     Glam.Interpreter
+    Glam.Inference

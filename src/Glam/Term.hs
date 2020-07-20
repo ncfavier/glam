@@ -14,7 +14,7 @@ type Var = String
 type Subst = Map Var Term
 
 infixl :<*>:
-infixl :$:
+infixl 9 :$:
 
 data Term =
     -- Variables
@@ -24,7 +24,7 @@ data Term =
     -- Products
     | Unit | Pair Term Term | Fst Term | Snd Term
     -- Sums
-    | InL Term | InR Term | Case Term Term Term
+    | Abort Term | InL Term | InR Term | Case Term Term Term
     -- Functions
     | Abs Var Term | Term :$: Term
     -- Let-bindings
@@ -32,9 +32,9 @@ data Term =
     -- Recursion operations
     | Fold Term | Unfold Term | Fix Term
     -- 'Later' operations
-    | Next Term | Prev Delayed | PrevI Term | Term :<*>: Term
+    | Next Term | Prev Term | Term :<*>: Term
     -- 'Constant' operations
-    | Box Delayed | BoxI Term | Unbox Term
+    | Box Term | Unbox Term
     deriving Eq
 
 data Delayed = Subst Subst Term deriving Eq
@@ -50,6 +50,7 @@ freeVariables Unit           = Set.empty
 freeVariables (Pair t1 t2)   = freeVariables t1 <> freeVariables t2
 freeVariables (Fst t)        = freeVariables t
 freeVariables (Snd t)        = freeVariables t
+freeVariables (Abort t)      = freeVariables t
 freeVariables (InL t)        = freeVariables t
 freeVariables (InR t)        = freeVariables t
 freeVariables (Case t t1 t2) = freeVariables t <> freeVariables t1 <> freeVariables t2
@@ -60,11 +61,9 @@ freeVariables (Fold t)       = freeVariables t
 freeVariables (Unfold t)     = freeVariables t
 freeVariables (Fix t)        = freeVariables t
 freeVariables (Next t)       = freeVariables t
-freeVariables (Prev d)       = freeVariablesDelayed d
-freeVariables (PrevI t)      = freeVariables t
+freeVariables (Prev t)       = freeVariables t
 freeVariables (t1 :<*>: t2)  = freeVariables t1 <> freeVariables t2
-freeVariables (Box d)        = freeVariablesDelayed d
-freeVariables (BoxI t)       = freeVariables t
+freeVariables (Box t)        = freeVariables t
 freeVariables (Unbox t)      = freeVariables t
 
 freeIn :: Var -> Term -> Bool
@@ -106,6 +105,7 @@ substitute _ Unit           = Unit
 substitute s (Pair t1 t2)   = Pair (substitute s t1) (substitute s t2)
 substitute s (Fst t)        = Fst (substitute s t)
 substitute s (Snd t)        = Snd (substitute s t)
+substitute s (Abort t)      = Abort (substitute s t)
 substitute s (InL t)        = InL (substitute s t)
 substitute s (InR t)        = InR (substitute s t)
 substitute s (Case t t1 t2) = Case (substitute s t) (substitute s t1) (substitute s t2)
@@ -117,11 +117,9 @@ substitute s (Fold t)       = Fold (substitute s t)
 substitute s (Unfold t)     = Unfold (substitute s t)
 substitute s (Fix t)        = Fix (substitute s t)
 substitute s (Next t)       = Next (substitute s t)
-substitute s (Prev d)       = Prev (substituteDelayed s d)
-substitute s (PrevI t)      = PrevI (substitute s t)
+substitute s (Prev t)       = Prev (substitute s t)
 substitute s (t1 :<*>: t2)  = substitute s t1 :<*>: substitute s t2
-substitute s (Box d)        = Box (substituteDelayed s d)
-substitute s (BoxI t)       = BoxI (substitute s t)
+substitute s (Box t)        = Box (substitute s t)
 substitute s (Unbox t)      = Unbox (substitute s t)
 
 substituteDelayed :: Subst -> Delayed -> Delayed
@@ -130,41 +128,7 @@ substituteDelayed s d = Subst (substitute s <$> s') (substitute (s Map.\\ s') t)
 
 substitute1 x s = substitute (Map.singleton x s)
 
--- Identity substitutions for `prev` and `box`.
-prev t = Prev (Subst (Map.fromSet Var (freeVariables t)) t)
-box t = Box (Subst (Map.fromSet Var (freeVariables t)) t)
-
 fix_ x t = Fix (Abs x t)
-
-desugar :: Term -> Term
-desugar (Var x)           = Var x
-desugar (Int i)           = Int i
-desugar (Plus t1 t2)      = Plus (desugar t1) (desugar t2)
-desugar (Minus t1 t2)     = Minus (desugar t1) (desugar t2)
-desugar Unit              = Unit
-desugar (Pair t1 t2)      = Pair (desugar t1) (desugar t2)
-desugar (Fst t)           = Fst (desugar t)
-desugar (Snd t)           = Snd (desugar t)
-desugar (InL t)           = InL (desugar t)
-desugar (InR t)           = InR (desugar t)
-desugar (Case t t1 t2)    = Case (desugar t) (desugar t1) (desugar t2)
-desugar (Abs x t)         = Abs x (desugar t)
-desugar (t1 :$: t2)       = desugar t1 :$: desugar t2
-desugar (Let (Subst s t)) = desugar (substitute s t)
-desugar (Fold t)          = Fold (desugar t)
-desugar (Unfold t)        = Unfold (desugar t)
-desugar (Fix t)           = Fix (desugar t)
-desugar (Next t)          = Next (desugar t)
-desugar (Prev d)          = Prev (desugarDelayed d)
-desugar (PrevI t)         = prev (desugar t)
-desugar (t1 :<*>: t2)     = desugar t1 :<*>: desugar t2
-desugar (Box d)           = Box (desugarDelayed d)
-desugar (BoxI t)          = box (desugar t)
-desugar (Unbox t)         = Unbox (desugar t)
-
-desugarDelayed :: Delayed -> Delayed
-desugarDelayed (Subst s t) = Subst s' (desugar t)
-    where s' = Map.map desugar s
 
 -- Small-step operational semantics for the calculus: performs a single reduction step, if possible.
 reduce :: Term -> Maybe Term
@@ -180,24 +144,22 @@ reduce (Case (InR t) _ (Abs x2 t2))           = Just (substitute1 x2 t t2)
 reduce (Unfold (Fold t))                      = Just t
 reduce t@(Fix (Abs x t'))                     = Just (substitute1 x (Next t) t')
 reduce (Next t1 :<*>: Next t2)                = Just (Next (t1 :$: t2))
-reduce (Unbox (Box (Subst s t)))              = Just (substitute s t)
-reduce (Prev (Subst s (Next t))) | Map.null s = Just t
-reduce (Prev (Subst s t)) | not (Map.null s)  = Just (Prev (Subst Map.empty (substitute s t)))
+reduce (Unbox (Box t))                        = Just t
+reduce (Prev (Next t))                        = Just t
 -- Context rules (weak call-by-name evaluation)
-reduce (t1 :$: t2)        | Just t1' <- reduce t1 = Just (t1' :$: t2)
-reduce (Plus t1 t2)       | Just t1' <- reduce t1 = Just (Plus t1' t2)
-                          | Just t2' <- reduce t2 = Just (Plus t1 t2')
-reduce (Minus t1 t2)      | Just t1' <- reduce t1 = Just (Minus t1' t2)
-                          | Just t2' <- reduce t2 = Just (Minus t1 t2')
-reduce (Fst t)            | Just t' <- reduce t   = Just (Fst t')
-reduce (Snd t)            | Just t' <- reduce t   = Just (Snd t')
-reduce (Case t t1 t2)     | Just t' <- reduce t   = Just (Case t' t1 t2)
-reduce (Unfold t)         | Just t' <- reduce t   = Just (Unfold t')
-reduce (Unbox t)          | Just t' <- reduce t   = Just (Unbox t')
-reduce (Prev (Subst s t)) | Map.null s
-                          , Just t' <- reduce t   = Just (Prev (Subst s t'))
-reduce (t1 :<*>: t2)      | Just t1' <- reduce t1 = Just (t1' :<*>: t2)
-                          | Just t2' <- reduce t2 = Just (t1 :<*>: t2')
+reduce (t1 :$: t2)    | Just t1' <- reduce t1 = Just (t1' :$: t2)
+reduce (Plus t1 t2)   | Just t1' <- reduce t1 = Just (Plus t1' t2)
+                      | Just t2' <- reduce t2 = Just (Plus t1 t2')
+reduce (Minus t1 t2)  | Just t1' <- reduce t1 = Just (Minus t1' t2)
+                      | Just t2' <- reduce t2 = Just (Minus t1 t2')
+reduce (Fst t)        | Just t' <- reduce t   = Just (Fst t')
+reduce (Snd t)        | Just t' <- reduce t   = Just (Snd t')
+reduce (Case t t1 t2) | Just t' <- reduce t   = Just (Case t' t1 t2)
+reduce (Unfold t)     | Just t' <- reduce t   = Just (Unfold t')
+reduce (Unbox t)      | Just t' <- reduce t   = Just (Unbox t')
+reduce (Prev t)       | Just t' <- reduce t   = Just (Prev t')
+reduce (t1 :<*>: t2)  | Just t1' <- reduce t1 = Just (t1' :<*>: t2)
+                      | Just t2' <- reduce t2 = Just (t1 :<*>: t2')
 reduce _ = Nothing
 
 -- The sequence of reduction steps starting with t.
@@ -235,6 +197,8 @@ instance Show Term where
         showString "fst " . showsPrec (appPrec + 1) t
     showsPrec d (Snd t) = showParen (d > appPrec) $
         showString "snd " . showsPrec (appPrec + 1) t
+    showsPrec d (Abort t) = showParen (d > appPrec) $
+        showString "abort " . showsPrec (appPrec + 1) t
     showsPrec d (InL t) = showParen (d > appPrec) $
         showString "left " . showsPrec (appPrec + 1) t
     showsPrec d (InR t) = showParen (d > appPrec) $
@@ -258,14 +222,12 @@ instance Show Term where
         showString "fix " . showString x . showString ". " . shows t
     showsPrec d (Next t) = showParen (d > appPrec) $
         showString "next " . showsPrec (appPrec + 1) t
-    showsPrec d (Prev d') = showDelayed "prev" d d'
-    showsPrec d (PrevI t) = showParen (d > appPrec) $
+    showsPrec d (Prev t) = showParen (d > appPrec) $
         showString "prev " . showsPrec (appPrec + 1) t
     showsPrec d (t1 :<*>: t2) = showParen (d > prec) $
         showsPrec prec t1 . showString " <*> " . showsPrec (prec + 1) t2
         where prec = 4
-    showsPrec d (Box d') = showDelayed "box" d d'
-    showsPrec d (BoxI t) = showParen (d > appPrec) $
+    showsPrec d (Box t) = showParen (d > appPrec) $
         showString "box " . showsPrec (appPrec + 1) t
     showsPrec d (Unbox t) = showParen (d > appPrec) $
         showString "unbox " . showsPrec (appPrec + 1) t
@@ -275,10 +237,10 @@ instance Show Term where
 variable :: Parser Var
 variable = mkIdentifier
     ["fst", "snd", "left", "right", "case", "of", "let", "fold", "unfold",
-     "fix", "next", "prev", "box", "unbox", "in"]
+     "fix", "next", "prev", "box", "unbox", "in", "type"]
 
 term :: Parser Term
-term = choice [abs_, fix__, case_, letIn, try prevIn, try boxIn, makeExprParser base ops] <?> "term"
+term = choice [abs_, fix__, case_, letIn, makeExprParser base ops] <?> "term"
     where
     abs_ = flip (foldr Abs) <$ lambda <*> some variable <* dot <*> term
     fix__ = flip (foldr fix_) <$ "fix" <*> some variable <* dot <*> term
@@ -291,14 +253,12 @@ term = choice [abs_, fix__, case_, letIn, try prevIn, try boxIn, makeExprParser 
             return $ Case t (Abs x1 t1) (Abs x2 t2)
     delayed = Subst <$> braces subst <* "in" <*> term
     letIn = Let <$ "let" <*> delayed
-    prevIn = Prev <$ "prev" <*> delayed
-    boxIn = Box <$ "box" <*> delayed
     base =  Var <$> variable
         <|> Int <$> number
         <|> parens (try (Pair <$> term <* comma) <*> term <|> term <|> pure Unit)
-    unaries = [("fst", Fst), ("snd", Snd), ("left", InL), ("right", InR),
-               ("fold", Fold), ("unfold", Unfold), ("next", Next), ("prev", PrevI),
-               ("box", BoxI), ("unbox", Unbox)]
+    unaries = [("fst", Fst), ("snd", Snd), ("abort", Abort), ("left", InL), ("right", InR),
+               ("fold", Fold), ("unfold", Unfold), ("next", Next), ("prev", Prev),
+               ("box", Box), ("unbox", Unbox)]
     unary = choice [f <$ hidden (keyword w) | (w, f) <- unaries]
     ops = [ [ InfixL (pure (:$:))
             , Prefix (foldr1 (.) <$> some unary) ]
@@ -311,7 +271,7 @@ binding = try (mkBinding <$> variable <*> many variable <* equal) <*> term
     where
     mkBinding x ys t = autoFix x (foldr Abs t ys)
     autoFix x t | x `freeIn` t = (x, Fix (Abs x t))
-                | otherwise = (x, t)
+                | otherwise    = (x, t)
 
 subst :: Parser Subst
 subst = Map.fromList <$> binding `sepBy` semicolon

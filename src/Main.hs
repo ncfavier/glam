@@ -16,8 +16,6 @@ instance MonadState s m => MonadState s (InputT m) where
     get = lift get
     put = lift . put
 
-die' s = hPutStr stderr s >> exitFailure
-
 usage = "usage: glam [options...] files..."
 
 options = [Option ['i'] ["interactive"] (NoArg ()) "run in interactive mode"]
@@ -26,13 +24,13 @@ parseArgs = do
     args <- getArgs
     (i, fs) <- case getOpt Permute options args of
         (o, fs, [])  -> pure (not (null o), fs)
-        (_, _, errs) -> die' $ concat errs ++ usageInfo usage options
+        (_, _, errs) -> die $ concat errs ++ usageInfo usage options
     let interactive = i || null fs
     return (interactive, fs)
 
 comp = completeWord Nothing " \t" $ \p -> do
     defined <- getDefined
-    let words = defined ++ ["fst", "snd", "left", "right", "fold", "unfold", "box", "unbox", "next", "prev"]
+    let words = defined ++ ["fst", "snd", "abort", "left", "right", "fold", "unfold", "box", "unbox", "next", "prev"]
     return [simpleCompletion w | w <- words, p `isPrefixOf` w]
 
 settings = Settings { complete = comp
@@ -49,11 +47,11 @@ main = runGlamT $ do
         let (name, contents) | f == "-"  = ("", getContents)
                              | otherwise = (f, readFile f)
         contents <- liftIO contents
-        liftIO . either die' (mapM_ putStrLn) =<< runFile name contents
+        liftIO . either die (mapM_ putStrLn) =<< runFile name contents
     when interactive $ do
         liftIO greet
         runInputT settings repl
 
 repl = handleInterrupt repl $ withInterrupt $
     whileJust_ (getInputLine prompt) $ \line ->
-        liftIO . either (hPutStr stderr) (mapM_ putStrLn) =<< runFile "" line
+        liftIO . either (hPutStrLn stderr) (mapM_ putStrLn) =<< runFile "" line

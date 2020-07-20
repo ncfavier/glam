@@ -20,7 +20,7 @@ www/glam.js: $(dist)/all.js
 	cp $< $@
 
 www/glam.min.js: $(dist)/all.js $(dist)/all.js.externs
-	closure-compiler -O advanced -W QUIET --jscomp_off undefinedVars \
+	closure-compiler -O advanced -W quiet --jscomp_off undefinedVars \
 		--externs $(dist)/all.js.externs --js $< --js_output_file $@
 
 www/index.html: www/index.template.html FORCE

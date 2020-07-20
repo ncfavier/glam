@@ -22,7 +22,7 @@ type IndentRef = Maybe SourcePos
 type Parser = ReaderT IndentRef (Parsec Void String)
 
 parse :: Parser a -> String -> String -> Either String a
-parse p f s = first errorBundlePretty $ runParser (runReaderT p Nothing) f s
+parse p f s = first (init . errorBundlePretty) $ runParser (runReaderT p Nothing) f s
 
 whitespace :: Parser ()
 whitespace = L.space space1 (L.skipLineComment "--") (L.skipBlockComment "{-" "-}")
