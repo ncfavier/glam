@@ -37,6 +37,7 @@ bindTVar x t | x `freeInType` t = throwError $
                  "cannot construct infinite type " ++ x ++ " ~ " ++ show t
              | otherwise = modify $ \s -> s { typeBindings = Map.insert x t (typeBindings s) }
 
+-- Return the canonical form of a type.
 canon :: MonadInfer m => Type -> m Type
 canon (TVar x)     = expandTVar x (return (TVar x)) canon
 canon (a :*: b)    = (:*:) <$> canon a <*> canon b
@@ -47,6 +48,7 @@ canon (Constant t) = Constant <$> canon t
 canon (TFix x t)   = TFix x <$> canon t
 canon ty           = return ty
 
+-- Test whether a term only depends on constant environment variables.
 isConstantTerm :: MonadInfer m => Term -> m Bool
 isConstantTerm t = do
     env <- ask
@@ -55,6 +57,7 @@ isConstantTerm t = do
     constantBinding (_, True) = return True
     constantBinding (ty, False) = liftA2 (&&) isClosed isConstant <$> canon ty
 
+-- Unify two types.
 infix 5 ?=
 (?=) :: MonadInfer m => Type -> Type -> m ()
 t1          ?= t2 | t1 == t2 = return ()
@@ -68,6 +71,7 @@ TVar x      ?= t             = expandTVar x (bindTVar x =<< canon t) (?= t)
 t           ?= TVar x        = TVar x ?= t
 t1          ?= t2            = throwError $ "cannot match " ++ show t1 ++ " with " ++ show t2
 
+-- Type checking
 infix 5 ?:
 (?:) :: MonadInfer m => Term -> Type -> m ()
 Var x ?: ty = do
@@ -154,6 +158,7 @@ Box t ?: ty = do
     unless constant $ throwError $ "non-constant term for box: " ++ show t
 Unbox t ?: ty = t ?: Constant ty
 
+-- Type inference
 (?:?) :: MonadInfer m => Term -> m Type
 (?:?) t = do
     ty <- freshTVar
