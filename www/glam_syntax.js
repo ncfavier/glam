@@ -183,13 +183,13 @@ CodeMirror.defineMode("glam", function(_config, modeConfig) {
     }
 
     setType("keyword")(
-      "case", "in", "let", "of", "prev", "box", "fix", "Fix", "Int");
+      "case", "of", "let", "in", "fix", "Fix", "Int");
 
     setType("keyword")(
       "=", "\\", "λ", ".", ":", "->", ">", "#", "+", "*");
 
     setType("builtin")(
-      "next", "unbox", "fold", "unfold", "fst", "snd", "abort", "left", "right");
+      "next", "prev", "box", "unbox", "fold", "unfold", "fst", "snd", "abort", "left", "right");
 
     setType("builtin")(
       "<*>", "<$>");
