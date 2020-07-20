@@ -73,12 +73,12 @@ isValid _            = True
 
 -- Constant types
 isConstant :: Type -> Bool
-isConstant (t1 :*: t2)  = isConstant t1 && isConstant t2
-isConstant (t1 :+: t2)  = isConstant t1 && isConstant t2
-isConstant (t1 :->: t2) = isConstant t1 && isConstant t2
-isConstant (Later _)    = False
-isConstant (TFix _ t)   = isConstant t
-isConstant _            = True
+isConstant (t1 :*: t2) = isConstant t1 && isConstant t2
+isConstant (t1 :+: t2) = isConstant t1 && isConstant t2
+isConstant (_ :->: t2) = isConstant t2
+isConstant (Later _)   = False
+isConstant (TFix _ t)  = isConstant t
+isConstant _           = True
 
 freshTVarFor :: Set TVar -> [TVar]
 freshTVarFor vs = [v | n <- [1..]
