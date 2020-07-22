@@ -2,11 +2,15 @@ module Glam.Type where
 
 import           Data.Set (Set)
 import qualified Data.Set as Set
+import           Data.Map (Map)
+import qualified Data.Map as Map
 import           Control.Monad
 
 import Glam.Parser
 
 type TVar = String
+
+type TSubst = Map TVar Type
 
 infixr 7 :*:
 infixr 6 :+:
@@ -17,7 +21,7 @@ data Type =
     -- Base types
     | TInt
     -- Type applications
-    -- | TApp Type Type
+    | TApp Type Type
     -- Products
     | One | Type :*: Type
     -- Sums
@@ -30,24 +34,21 @@ data Type =
     | TFix TVar Type
     deriving Eq
 
-data TypeConstructor = TAbs [TVar] Type
-    deriving (Eq, Show)
-
-freeTypeVariables :: Type -> Set TVar
-freeTypeVariables (TVar x)     = Set.singleton x
-freeTypeVariables (t1 :*: t2)  = freeTypeVariables t1 <> freeTypeVariables t2
-freeTypeVariables (t1 :+: t2)  = freeTypeVariables t1 <> freeTypeVariables t2
-freeTypeVariables (t1 :->: t2) = freeTypeVariables t1 <> freeTypeVariables t2
-freeTypeVariables (Later t)    = freeTypeVariables t
-freeTypeVariables (Constant t) = freeTypeVariables t
-freeTypeVariables (TFix x t)   = Set.delete x (freeTypeVariables t)
-freeTypeVariables _            = Set.empty
+freeTVars :: Type -> Set TVar
+freeTVars (TVar x)     = Set.singleton x
+freeTVars (t1 :*: t2)  = freeTVars t1 <> freeTVars t2
+freeTVars (t1 :+: t2)  = freeTVars t1 <> freeTVars t2
+freeTVars (t1 :->: t2) = freeTVars t1 <> freeTVars t2
+freeTVars (Later t)    = freeTVars t
+freeTVars (Constant t) = freeTVars t
+freeTVars (TFix x t)   = Set.delete x (freeTVars t)
+freeTVars _            = Set.empty
 
 freeInType :: TVar -> Type -> Bool
-x `freeInType` t = x `Set.member` freeTypeVariables t
+x `freeInType` t = x `Set.member` freeTVars t
 
 isClosed :: Type -> Bool
-isClosed t = Set.null (freeTypeVariables t)
+isClosed t = Set.null (freeTVars t)
 
 guardedIn :: TVar -> Type -> Bool
 x `guardedIn` TVar y       = x /= y
@@ -85,23 +86,23 @@ freshTVarFor vs = [v | n <- [1..]
                      , v <- replicateM n ['a'..'z']
                      , v `Set.notMember` vs]
 
-avoidCaptureType vs (TFix x t)
-    | x `Set.member` vs = TFix y (substituteType x (TVar y) t)
-    | otherwise = TFix x t
-    where y:_ = freshTVarFor (vs <> freeTypeVariables (TFix x t))
+avoidCaptureType vs ty@(TFix x tf)
+    | x `Set.member` vs = TFix y (substituteType1 x (TVar y) tf)
+    | otherwise = ty
+    where y:_ = freshTVarFor (vs <> freeTVars ty)
 
-substituteType :: TVar -> Type -> Type -> Type
-substituteType x t (TVar y) | x == y = t
-substituteType x t (t1 :*: t2) = substituteType x t t1 :*: substituteType x t t2
-substituteType x t (t1 :+: t2) = substituteType x t t1 :+: substituteType x t t2
-substituteType x t (t1 :->: t2) = substituteType x t t1 :->: substituteType x t t2
-substituteType x t (Later t1) = Later (substituteType x t t1)
-substituteType x t (Constant t1) = Constant (substituteType x t t1)
-substituteType x t (TFix y tf)
-    | x == y = TFix y tf
-    | otherwise = TFix y' (substituteType x t tf')
-    where TFix y' tf' = avoidCaptureType (freeTypeVariables t) (TFix y tf)
-substituteType _ _ ty = ty
+substituteType :: TSubst -> Type -> Type
+substituteType s (TVar x) = Map.findWithDefault (TVar x) x s
+substituteType s (t1 :*: t2) = substituteType s t1 :*: substituteType s t2
+substituteType s (t1 :+: t2) = substituteType s t1 :+: substituteType s t2
+substituteType s (t1 :->: t2) = substituteType s t1 :->: substituteType s t2
+substituteType s (Later t1) = Later (substituteType s t1)
+substituteType s (Constant t1) = Constant (substituteType s t1)
+substituteType s ty@TFix{} = TFix x (substituteType s tf)
+    where TFix x tf = avoidCaptureType (foldMap freeTVars s) ty
+substituteType _ ty = ty
+
+substituteType1 x s = substituteType (Map.singleton x s)
 
 -- Printing
 
@@ -144,17 +145,9 @@ type_ = tfix <|> makeExprParser base ops <?> "type"
         <|> parens type_
     modality =  Later <$ symbol ">"
             <|> Constant <$ symbol "#"
-    ops = [ {-[InfixL (pure TApp)]
-          , -}[Prefix (foldr1 (.) <$> some modality)]
+    ops = [ [InfixL (pure TApp)]
+          , [Prefix (foldr1 (.) <$> some modality)]
           , [binary "*" (:*:)]
           , [binary "+" (:+:)]
           , [binary "->" (:->:)] ]
     binary w f = InfixR (f <$ symbol w)
-
--- typeDef :: Parser (TVar, TypeConstructor)
--- typeDef = mkTypeDef <$ "type" <*> typeVariable <*> many typeVariable <* equal <*> type_
---     where
---     mkTypeDef x ys t = TAbs ys (autoTFix t) where
---         rec =
---         autoTFix t | x `freeIn` t = (x, Fix (Abs x t))
---                    | otherwise    = (x, t)

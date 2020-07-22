@@ -41,57 +41,57 @@ data Delayed = Subst Subst Term deriving Eq
 
 -- Variables
 
-freeVariables :: Term -> Set Var
-freeVariables (Var x)        = Set.singleton x
-freeVariables (Int _)        = Set.empty
-freeVariables (Plus t1 t2)   = freeVariables t1 <> freeVariables t2
-freeVariables (Minus t1 t2)  = freeVariables t1 <> freeVariables t2
-freeVariables Unit           = Set.empty
-freeVariables (Pair t1 t2)   = freeVariables t1 <> freeVariables t2
-freeVariables (Fst t)        = freeVariables t
-freeVariables (Snd t)        = freeVariables t
-freeVariables (Abort t)      = freeVariables t
-freeVariables (InL t)        = freeVariables t
-freeVariables (InR t)        = freeVariables t
-freeVariables (Case t t1 t2) = freeVariables t <> freeVariables t1 <> freeVariables t2
-freeVariables (Abs x t)      = Set.delete x (freeVariables t)
-freeVariables (t1 :$: t2)    = freeVariables t1 <> freeVariables t2
-freeVariables (Let d)        = freeVariablesDelayed d
-freeVariables (Fold t)       = freeVariables t
-freeVariables (Unfold t)     = freeVariables t
-freeVariables (Fix t)        = freeVariables t
-freeVariables (Next t)       = freeVariables t
-freeVariables (Prev t)       = freeVariables t
-freeVariables (t1 :<*>: t2)  = freeVariables t1 <> freeVariables t2
-freeVariables (Box t)        = freeVariables t
-freeVariables (Unbox t)      = freeVariables t
+freeVars :: Term -> Set Var
+freeVars (Var x)        = Set.singleton x
+freeVars (Int _)        = Set.empty
+freeVars (Plus t1 t2)   = freeVars t1 <> freeVars t2
+freeVars (Minus t1 t2)  = freeVars t1 <> freeVars t2
+freeVars Unit           = Set.empty
+freeVars (Pair t1 t2)   = freeVars t1 <> freeVars t2
+freeVars (Fst t)        = freeVars t
+freeVars (Snd t)        = freeVars t
+freeVars (Abort t)      = freeVars t
+freeVars (InL t)        = freeVars t
+freeVars (InR t)        = freeVars t
+freeVars (Case t t1 t2) = freeVars t <> freeVars t1 <> freeVars t2
+freeVars (Abs x t)      = Set.delete x (freeVars t)
+freeVars (t1 :$: t2)    = freeVars t1 <> freeVars t2
+freeVars (Let d)        = freeVarsDelayed d
+freeVars (Fold t)       = freeVars t
+freeVars (Unfold t)     = freeVars t
+freeVars (Fix t)        = freeVars t
+freeVars (Next t)       = freeVars t
+freeVars (Prev t)       = freeVars t
+freeVars (t1 :<*>: t2)  = freeVars t1 <> freeVars t2
+freeVars (Box t)        = freeVars t
+freeVars (Unbox t)      = freeVars t
 
 freeIn :: Var -> Term -> Bool
-x `freeIn` t = x `Set.member` freeVariables t
+x `freeIn` t = x `Set.member` freeVars t
 
-freeVariablesSubst :: Subst -> Set Var
-freeVariablesSubst = foldMap freeVariables
+freeVarsSubst :: Subst -> Set Var
+freeVarsSubst = foldMap freeVars
 
-freeVariablesDelayed :: Delayed -> Set Var
-freeVariablesDelayed (Subst s t) = freeVariablesSubst s <> (freeVariables t Set.\\ Map.keysSet s)
+freeVarsDelayed :: Delayed -> Set Var
+freeVarsDelayed (Subst s t) = freeVarsSubst s <> (freeVars t Set.\\ Map.keysSet s)
 
-freshFor :: Set Var -> [Var]
-freshFor vs = [v | n <- [1..]
-                 , v <- replicateM n ['a'..'z']
-                 , v `Set.notMember` vs]
+freshVarFor :: Set Var -> [Var]
+freshVarFor vs = [v | n <- [1..]
+                    , v <- replicateM n ['a'..'z']
+                    , v `Set.notMember` vs]
 
 -- Alpha-renames an abstraction so as to avoid capturing any of the variables in `vs`.
-avoidCapture vs t@(Abs x t')
-    | x `Set.member` vs = Abs y (substitute1 x (Var y) t')
+avoidCapture vs t@(Abs x u)
+    | x `Set.member` vs = Abs y (substitute1 x (Var y) u)
     | otherwise = t
-    where y:_ = freshFor (vs <> freeVariables t)
+    where y:_ = freshVarFor (vs <> freeVars t)
 
 -- Same for a delayed substitution.
 avoidCaptureDelayed vs d@(Subst s t)
     | not (null conflicts) = Subst s' t'
     | otherwise = d
     where conflicts = Map.keys (Map.restrictKeys s vs)
-          renaming = Map.fromList (zip conflicts (freshFor (vs <> freeVariablesDelayed d <> Map.keysSet s)))
+          renaming = Map.fromList (zip conflicts (freshVarFor (vs <> freeVarsDelayed d <> Map.keysSet s)))
           s' = Map.mapKeys (\v -> Map.findWithDefault v v renaming) s
           t' = substitute (Map.map Var renaming) t
 
@@ -109,8 +109,8 @@ substitute s (Abort t)      = Abort (substitute s t)
 substitute s (InL t)        = InL (substitute s t)
 substitute s (InR t)        = InR (substitute s t)
 substitute s (Case t t1 t2) = Case (substitute s t) (substitute s t1) (substitute s t2)
-substitute s t@Abs{}        = Abs x (substitute (Map.delete x s) t')
-    where Abs x t' = avoidCapture (freeVariablesSubst s) t
+substitute s t@Abs{}        = Abs x (substitute (Map.delete x s) u)
+    where Abs x u = avoidCapture (freeVarsSubst s) t
 substitute s (t1 :$: t2)    = substitute s t1 :$: substitute s t2
 substitute s (Let d)        = Let (substituteDelayed s d)
 substitute s (Fold t)       = Fold (substitute s t)
@@ -124,7 +124,7 @@ substitute s (Unbox t)      = Unbox (substitute s t)
 
 substituteDelayed :: Subst -> Delayed -> Delayed
 substituteDelayed s d = Subst (substitute s <$> s') (substitute (s Map.\\ s') t)
-    where Subst s' t = avoidCaptureDelayed (freeVariablesSubst s) d
+    where Subst s' t = avoidCaptureDelayed (freeVarsSubst s) d
 
 substitute1 x s = substitute (Map.singleton x s)
 
@@ -133,19 +133,19 @@ fix_ x t = Fix (Abs x t)
 -- Small-step operational semantics for the calculus: performs a single reduction step, if possible.
 reduce :: Term -> Maybe Term
 -- Reduction rules
-reduce (Abs x t :$: s)                        = Just (substitute1 x s t)
-reduce (Let (Subst s t))                      = Just (substitute s t)
-reduce (Int a `Plus` Int b)                   = Just (Int (a + b))
-reduce (Int a `Minus` Int b)                  = Just (Int (a - b))
-reduce (Fst (Pair t1 _))                      = Just t1
-reduce (Snd (Pair _ t2))                      = Just t2
-reduce (Case (InL t) (Abs x1 t1) _)           = Just (substitute1 x1 t t1)
-reduce (Case (InR t) _ (Abs x2 t2))           = Just (substitute1 x2 t t2)
-reduce (Unfold (Fold t))                      = Just t
-reduce t@(Fix (Abs x t'))                     = Just (substitute1 x (Next t) t')
-reduce (Next t1 :<*>: Next t2)                = Just (Next (t1 :$: t2))
-reduce (Unbox (Box t))                        = Just t
-reduce (Prev (Next t))                        = Just t
+reduce (Abs x t :$: s)              = Just (substitute1 x s t)
+reduce (Let (Subst s t))            = Just (substitute s t)
+reduce (Int a `Plus` Int b)         = Just (Int (a + b))
+reduce (Int a `Minus` Int b)        = Just (Int (a - b))
+reduce (Fst (Pair t1 _))            = Just t1
+reduce (Snd (Pair _ t2))            = Just t2
+reduce (Case (InL t) (Abs x1 t1) _) = Just (substitute1 x1 t t1)
+reduce (Case (InR t) _ (Abs x2 t2)) = Just (substitute1 x2 t t2)
+reduce (Unfold (Fold t))            = Just t
+reduce t@(Fix (Abs x t'))           = Just (substitute1 x (Next t) t')
+reduce (Next t1 :<*>: Next t2)      = Just (Next (t1 :$: t2))
+reduce (Unbox (Box t))              = Just t
+reduce (Prev (Next t))              = Just t
 -- Context rules (weak call-by-name evaluation)
 reduce (t1 :$: t2)    | Just t1' <- reduce t1 = Just (t1' :$: t2)
 reduce (Plus t1 t2)   | Just t1' <- reduce t1 = Just (Plus t1' t2)
@@ -269,9 +269,9 @@ term = choice [abs_, fix__, case_, letIn, makeExprParser base ops] <?> "term"
 binding :: Parser (Var, Term)
 binding = try (mkBinding <$> variable <*> many variable <* equal) <*> term
     where
-    mkBinding x ys t = autoFix x (foldr Abs t ys)
-    autoFix x t | x `freeIn` t = (x, Fix (Abs x t))
-                | otherwise    = (x, t)
+    mkBinding x ys t = (x, autoFix x (foldr Abs t ys))
+    autoFix x t | x `freeIn` t = Fix (Abs x t)
+                | otherwise    = t
 
 subst :: Parser Subst
 subst = Map.fromList <$> binding `sepBy` semicolon

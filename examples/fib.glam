@@ -1,11 +1,13 @@
 -- Guarded recursive streams
-consG : Int -> >(Fix x. Int * >x) -> (Fix x. Int * >x)
+type StreamG a = a * >StreamG a
+
+consG : Int -> >StreamG Int -> StreamG Int
 consG x s = fold (x, s)
 
-headG : (Fix x. Int * >x) -> Int
+headG : StreamG Int -> Int
 headG s = fst unfold s
 
-tailG : (Fix x. Int * >x) -> >(Fix x. Int * >x)
+tailG : StreamG Int -> >StreamG Int
 tailG s = snd unfold s
 
 zipWithG f = let { go s1 s2 = consG (f (headG s1) (headG s2))
@@ -13,13 +15,17 @@ zipWithG f = let { go s1 s2 = consG (f (headG s1) (headG s2))
              in go
 
 -- Coinductive streams
+type Stream a = #StreamG a
+
 cons x s = box (consG x (next unbox s))
 head   s = headG unbox s
 tail   s = box prev (tailG unbox s)
 
 -- The Fibonacci sequence
 fibG = consG 0 ((\f. consG 1 (zipWithG (\x y. x + y) f <$> tailG f)) <$> fibG)
-fib  = box fibG
+
+fib : Stream Int
+fib = box fibG
 
 -- Print the first five Fibonacci numbers
 head fib

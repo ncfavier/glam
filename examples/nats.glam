@@ -1,24 +1,30 @@
 -- Guarded recursive streams
-consG : Int -> >(Fix x. Int * >x) -> (Fix x. Int * >x)
+type StreamG a = a * >StreamG a
+
+consG : Int -> >StreamG Int -> StreamG Int
 consG x s = fold (x, s)
 
-headG : (Fix x. Int * >x) -> Int
+headG : StreamG Int -> Int
 headG s = fst unfold s
 
-tailG : (Fix x. Int * >x) -> >(Fix x. Int * >x)
+tailG : StreamG Int -> >StreamG Int
 tailG s = snd unfold s
 
 mapG f = let { go s = consG (f (headG s)) (go <*> tailG s) }
          in go
 
 -- Coinductive streams
+type Stream a = #StreamG a
+
 cons x s = box (consG x (next unbox s))
 head   s = headG unbox s
 tail   s = box prev (tailG unbox s)
 
 -- The stream of natural numbers
 natsG = consG 0 (mapG (\n. n + 1) <$> natsG)
-nats  = box natsG
+
+nats : Stream Int
+nats = box natsG
 
 -- Print the third natural number, i.e. 2
 head (tail (tail nats))
