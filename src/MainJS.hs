@@ -9,7 +9,7 @@ foreign import javascript unsafe "init($1)"
     initJS :: Callback a -> IO ()
 
 main = do
-    run <- syncCallback1' $ \v -> do
+    run <- syncCallback1' \v -> do
         Just (unpack -> input) <- fromJSVal v
         toJSVal $ pack
                 $ either id unlines

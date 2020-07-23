@@ -183,7 +183,7 @@ CodeMirror.defineMode("glam", function(_config, modeConfig) {
     }
 
     setType("keyword")(
-      "case", "of", "let", "in", "fix", "Fix", "Int");
+      "case", "of", "let", "in", "fix", "Fix", "Int", "type", "forall");
 
     setType("keyword")(
       "=", "\\", "λ", ".", ":", "->", ">", "#", "+", "*");

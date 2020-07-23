@@ -246,7 +246,7 @@ term = choice [abs_, fix__, case_, letIn, makeExprParser base ops] <?> "term"
     fix__ = flip (foldr fix_) <$ "fix" <*> some variable <* dot <*> term
     case_ = do
         "case"; t <- term; "of"
-        braces $ do
+        braces do
             "left"; x1 <- variable; dot; t1 <- term
             semicolon
             "right"; x2 <- variable; dot; t2 <- term

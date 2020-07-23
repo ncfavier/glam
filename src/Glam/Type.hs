@@ -1,5 +1,6 @@
 module Glam.Type where
 
+import           Data.List
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Map (Map)
@@ -34,15 +35,36 @@ data Type =
     | TFix TVar Type
     deriving Eq
 
-freeTVars :: Type -> Set TVar
-freeTVars (TVar x)     = Set.singleton x
-freeTVars (t1 :*: t2)  = freeTVars t1 <> freeTVars t2
-freeTVars (t1 :+: t2)  = freeTVars t1 <> freeTVars t2
-freeTVars (t1 :->: t2) = freeTVars t1 <> freeTVars t2
-freeTVars (Later t)    = freeTVars t
-freeTVars (Constant t) = freeTVars t
-freeTVars (TFix x t)   = Set.delete x (freeTVars t)
-freeTVars _            = Set.empty
+data Polytype = Forall [TVar] Type
+              deriving Eq
+
+pattern Monotype ty = Forall [] ty
+
+class Types t where
+    isValid :: t -> Bool
+    freeTVars :: t -> Set TVar
+
+instance Types Type where
+    isValid (t1 :*: t2)  = isValid t1 && isValid t2
+    isValid (t1 :+: t2)  = isValid t1 && isValid t2
+    isValid (t1 :->: t2) = isValid t1 && isValid t2
+    isValid (Later t)    = isValid t
+    isValid (Constant t) = isValid t && isClosed t
+    isValid (TFix x t)   = isValid t && x `guardedIn` t
+    isValid _            = True
+
+    freeTVars (TVar x)     = Set.singleton x
+    freeTVars (t1 :*: t2)  = freeTVars t1 <> freeTVars t2
+    freeTVars (t1 :+: t2)  = freeTVars t1 <> freeTVars t2
+    freeTVars (t1 :->: t2) = freeTVars t1 <> freeTVars t2
+    freeTVars (Later t)    = freeTVars t
+    freeTVars (Constant t) = freeTVars t
+    freeTVars (TFix x t)   = Set.delete x (freeTVars t)
+    freeTVars _            = Set.empty
+
+instance Types Polytype where
+    isValid (Forall _ ty) = isValid ty
+    freeTVars (Forall xs ty) = freeTVars ty Set.\\ Set.fromList xs
 
 freeInType :: TVar -> Type -> Bool
 x `freeInType` t = x `Set.member` freeTVars t
@@ -61,16 +83,6 @@ x `guardedIn` (t1 :->: t2) = x `guardedIn` t1 && x `guardedIn` t2
 _ `guardedIn` Later _      = True
 x `guardedIn` Constant t   = x `guardedIn` t
 x `guardedIn` TFix y t     = x == y || x `guardedIn` t
-
--- Valid types
-isValid :: Type -> Bool
-isValid (t1 :*: t2)  = isValid t1 && isValid t2
-isValid (t1 :+: t2)  = isValid t1 && isValid t2
-isValid (t1 :->: t2) = isValid t1 && isValid t2
-isValid (Later t)    = isValid t
-isValid (Constant t) = isValid t && isClosed t
-isValid (TFix x t)   = isValid t && x `guardedIn` t
-isValid _            = True
 
 -- Constant types
 isConstant :: Type -> Bool
@@ -122,17 +134,21 @@ instance Show Type where
         showsPrec (sumPrec + 1) t1 . showString " + " . showsPrec (sumPrec + 1) t2
     showsPrec d (t1 :->: t2) = showParen (d > funPrec) $
         showsPrec (funPrec + 1) t1 . showString " -> " . showsPrec funPrec t2
-    showsPrec d (Later t)    = showParen (d > modPrec) $
-        showString ">" . showsPrec modPrec t
-    showsPrec d (Constant t) = showParen (d > modPrec) $
-        showString "#" . showsPrec modPrec t
-    showsPrec d (TFix x t)   = showParen (d > 0) $
-        showString "Fix " . showString x . showString ". " . shows t
+    showsPrec d (Later ty)    = showParen (d > modPrec) $
+        showString ">" . showsPrec modPrec ty
+    showsPrec d (Constant ty) = showParen (d > modPrec) $
+        showString "#" . showsPrec modPrec ty
+    showsPrec d (TFix x tf)   = showParen (d > 0) $
+        showString "Fix " . showString x . showString ". " . shows tf
+
+instance Show Polytype where
+    showsPrec _ (Forall [] ty) = shows ty
+    showsPrec _ (Forall xs ty) = showString "forall " . showString (intercalate " " xs) . showString ". " . shows ty
 
 -- Parsing
 
 typeVariable :: Parser TVar
-typeVariable = mkIdentifier ["Fix", "Int"]
+typeVariable = mkIdentifier ["Fix", "Int", "forall"]
 
 type_ :: Parser Type
 type_ = tfix <|> makeExprParser base ops <?> "type"
@@ -151,3 +167,6 @@ type_ = tfix <|> makeExprParser base ops <?> "type"
           , [binary "+" (:+:)]
           , [binary "->" (:->:)] ]
     binary w f = InfixR (f <$ symbol w)
+
+polytype :: Parser Polytype
+polytype = Forall <$> option [] ("forall" *> some typeVariable <* dot) <*> type_

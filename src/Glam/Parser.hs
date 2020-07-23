@@ -73,7 +73,7 @@ number :: Parser Integer
 number = lexeme L.decimal
 
 mkIdentifier :: [String] -> Parser String
-mkIdentifier reserved = label "identifier" $ try $ lexeme $ do
+mkIdentifier reserved = label "identifier" $ try $ lexeme do
     w <- word
     if w `elem` reserved
         then fail $ "unexpected keyword " ++ w

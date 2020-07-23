@@ -1,7 +1,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
-import Data.List (isPrefixOf)
+import Data.Char
+import Data.List
 import Control.Monad.Loops
 import Control.Monad.State
 import System.Console.GetOpt
@@ -28,8 +29,8 @@ parseArgs = do
     let interactive = i || null fs
     return (interactive, fs)
 
-comp = completeWord Nothing " \t" $ \p -> do
-    defined <- getDefined
+comp = completeWord Nothing " \t" \p -> do
+    defined <- getWords
     let words = defined ++ ["fst", "snd", "abort", "left", "right", "fold", "unfold", "box", "unbox", "next", "prev"]
     return [simpleCompletion w | w <- words, p `isPrefixOf` w]
 
@@ -41,17 +42,31 @@ prompt = "> "
 
 greet = putStrLn "glam, the guarded λ-calculus (https://git.monade.li/glam)"
 
-main = runGlamT $ do
+main = runGlamT do
     (interactive, fs) <- liftIO parseArgs
-    forM_ fs $ \f -> do
+    forM_ fs \f -> do
         let (name, contents) | f == "-"  = ("", getContents)
                              | otherwise = (f, readFile f)
         contents <- liftIO contents
         liftIO . either die (mapM_ putStrLn) =<< runFile name contents
-    when interactive $ do
+    when interactive do
         liftIO greet
         runInputT settings repl
 
+commands =
+    ["type" ==> \s -> do
+        ty <- getType s
+        liftIO case ty of
+            Right ty -> putStrLn $ s ++ " : " ++ show ty
+            Left e -> hPutStrLn stderr e
+    ,"quit" ==> \_ -> liftIO exitSuccess
+    ] where (==>) = (,)
+
 repl = handleInterrupt repl $ withInterrupt $
-    whileJust_ (getInputLine prompt) $ \line ->
-        liftIO . either (hPutStrLn stderr) (mapM_ putStrLn) =<< runFile "" line
+    whileJust_ (getInputLine prompt) \(dropWhile isSpace -> line) -> case line of
+        ':':(break isSpace -> (cmd, dropWhile isSpace -> args)) ->
+            case [(n, c) | (n, c) <- commands, cmd `isPrefixOf` n] of
+                [] -> liftIO $ hPutStrLn stderr $ "unknown command :" ++ cmd
+                [(_, c)] -> c args
+                cs -> liftIO $ hPutStrLn stderr $ "ambiguous command :" ++ cmd ++ " could refer to: " ++ intercalate " " (map fst cs)
+        _ -> liftIO . either (hPutStrLn stderr) (mapM_ putStrLn) =<< runFile "" line
