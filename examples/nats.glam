@@ -16,17 +16,13 @@ mapG f = let { go s = consG (f (headG s)) (go <*> tailG s) }
 -- Coinductive streams
 type Stream a = #StreamG a
 
-cons : Int -> Stream Int -> Stream Int
 cons x s = box (consG x (next unbox s))
-
 head s = headG unbox s
-
-tail : Stream Int -> Stream Int
 tail s = box prev (tailG unbox s)
 
 -- The stream of natural numbers
 natsG = consG 0 (mapG (\n. n + 1) <$> natsG)
-nats  = box natsG
+nats = box natsG
 
 -- Print the third natural number, i.e. 2
 head (tail (tail nats))

@@ -17,6 +17,8 @@ instance MonadState s m => MonadState s (InputT m) where
     get = lift get
     put = lift . put
 
+err = liftIO . hPutStrLn stderr
+
 usage = "usage: glam [options...] files..."
 
 options = [Option ['i'] ["interactive"] (NoArg ()) "run in interactive mode"]
@@ -54,19 +56,19 @@ main = runGlamT do
         runInputT settings repl
 
 commands =
-    ["type" ==> \s -> do
+    [ "type" ==> \s -> do
         ty <- getType s
         liftIO case ty of
             Right ty -> putStrLn $ s ++ " : " ++ show ty
-            Left e -> hPutStrLn stderr e
-    ,"quit" ==> \_ -> liftIO exitSuccess
+            Left e -> err e
+    , "quit" ==> \_ -> liftIO exitSuccess
     ] where (==>) = (,)
 
 repl = handleInterrupt repl $ withInterrupt $
     whileJust_ (getInputLine prompt) \(dropWhile isSpace -> line) -> case line of
         ':':(break isSpace -> (cmd, dropWhile isSpace -> args)) ->
-            case [(n, c) | (n, c) <- commands, cmd `isPrefixOf` n] of
-                [] -> liftIO $ hPutStrLn stderr $ "unknown command :" ++ cmd
-                [(_, c)] -> c args
-                cs -> liftIO $ hPutStrLn stderr $ "ambiguous command :" ++ cmd ++ " could refer to: " ++ intercalate " " (map fst cs)
-        _ -> liftIO . either (hPutStrLn stderr) (mapM_ putStrLn) =<< runFile "" line
+            case [c | c@(name, _) <- commands, cmd `isPrefixOf` name] of
+                [(_, action)] -> action args
+                [] -> err $ "unknown command :" ++ cmd
+                cs -> err $ "ambiguous command :" ++ cmd ++ " could refer to: " ++ intercalate " " (map fst cs)
+        _ -> liftIO . either err (mapM_ putStrLn) =<< runFile "" line

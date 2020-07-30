@@ -35,7 +35,7 @@ data Type =
     | TFix TVar Type
     deriving Eq
 
-data Polytype = Forall [TVar] Type
+data Polytype = Forall [(TVar, Bool)] Type
               deriving Eq
 
 pattern Monotype ty = Forall [] ty
@@ -64,12 +64,10 @@ instance Types Type where
 
 instance Types Polytype where
     isValid (Forall _ ty) = isValid ty
-    freeTVars (Forall xs ty) = freeTVars ty Set.\\ Set.fromList xs
+    freeTVars (Forall (map fst -> xs) ty) = freeTVars ty Set.\\ Set.fromList xs
 
-freeInType :: TVar -> Type -> Bool
 x `freeInType` t = x `Set.member` freeTVars t
 
-isClosed :: Type -> Bool
 isClosed t = Set.null (freeTVars t)
 
 guardedIn :: TVar -> Type -> Bool
@@ -83,15 +81,6 @@ x `guardedIn` (t1 :->: t2) = x `guardedIn` t1 && x `guardedIn` t2
 _ `guardedIn` Later _      = True
 x `guardedIn` Constant t   = x `guardedIn` t
 x `guardedIn` TFix y t     = x == y || x `guardedIn` t
-
--- Constant types
-isConstant :: Type -> Bool
-isConstant (t1 :*: t2) = isConstant t1 && isConstant t2
-isConstant (t1 :+: t2) = isConstant t1 && isConstant t2
-isConstant (_ :->: t2) = isConstant t2
-isConstant (Later _)   = False
-isConstant (TFix _ t)  = isConstant t
-isConstant _           = True
 
 freshTVarFor :: Set TVar -> [TVar]
 freshTVarFor vs = [v | n <- [1..]
@@ -138,24 +127,24 @@ instance Show Type where
         showString ">" . showsPrec modPrec ty
     showsPrec d (Constant ty) = showParen (d > modPrec) $
         showString "#" . showsPrec modPrec ty
-    showsPrec d (TFix x tf)   = showParen (d > 0) $
+    showsPrec _ (TFix x tf)   = showParen True $
         showString "Fix " . showString x . showString ". " . shows tf
 
 instance Show Polytype where
     showsPrec _ (Forall [] ty) = shows ty
-    showsPrec _ (Forall xs ty) = showString "forall " . showString (intercalate " " xs) . showString ". " . shows ty
+    showsPrec _ (Forall xs ty) = showString "forall " . showString (intercalate " " [(if c then "#" else "") ++ x | (x, c) <- xs]) . showString ". " . shows ty
 
 -- Parsing
 
-typeVariable :: Parser TVar
-typeVariable = mkIdentifier ["Fix", "Int", "forall"]
+tVar :: Parser TVar
+tVar = mkIdentifier ["Fix", "Int", "forall"]
 
 type_ :: Parser Type
 type_ = tfix <|> makeExprParser base ops <?> "type"
     where
-    tfix = flip (foldr TFix) <$ "Fix" <*> some typeVariable <* dot <*> type_
+    tfix = flip (foldr TFix) <$ "Fix" <*> some tVar <* dot <*> type_
     base =  TInt <$ "Int"
-        <|> TVar <$> typeVariable
+        <|> TVar <$> tVar
         <|> One <$ symbol "1"
         <|> Zero <$ symbol "0"
         <|> parens type_
@@ -168,5 +157,8 @@ type_ = tfix <|> makeExprParser base ops <?> "type"
           , [binary "->" (:->:)] ]
     binary w f = InfixR (f <$ symbol w)
 
+quantifiedTVar :: Parser (TVar, Bool)
+quantifiedTVar = flip (,) <$> option False (True <$ symbol "#") <*> tVar
+
 polytype :: Parser Polytype
-polytype = Forall <$> option [] ("forall" *> some typeVariable <* dot) <*> type_
+polytype = Forall <$> option [] ("forall" *> some quantifiedTVar <* dot) <*> type_

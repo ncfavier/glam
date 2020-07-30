@@ -67,17 +67,13 @@ mapG f = let { go s = consG (f (headG s)) (go <*> tailG s) }
 -- Coinductive streams
 type Stream a = #StreamG a
 
-cons : Int -> Stream Int -> Stream Int
 cons x s = box (consG x (next unbox s))
-
 head s = headG unbox s
-
-tail : Stream Int -> Stream Int
 tail s = box prev (tailG unbox s)
 
 -- The stream of natural numbers
 natsG = consG 0 (mapG (\n. n + 1) <$> natsG)
-nats  = box natsG
+nats = box natsG
 
 -- Print the third natural number, i.e. 2
 head (tail (tail nats))</script>
@@ -100,17 +96,13 @@ zipWithG f = let { go s1 s2 = consG (f (headG s1) (headG s2))
 -- Coinductive streams
 type Stream a = #StreamG a
 
-cons : Int -> Stream Int -> Stream Int
 cons x s = box (consG x (next unbox s))
-
 head s = headG unbox s
-
-tail : Stream Int -> Stream Int
 tail s = box prev (tailG unbox s)
 
 -- The Fibonacci sequence
 fibG = consG 0 ((\f. consG 1 (zipWithG (\x y. x + y) f <$> tailG f)) <$> fibG)
-fib  = box fibG
+fib = box fibG
 
 -- Print the first five Fibonacci numbers
 head fib

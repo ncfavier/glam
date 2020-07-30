@@ -1,6 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Glam.Interpreter where
 
+import           Data.Functor.Identity
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Map (Map)
@@ -10,7 +11,7 @@ import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Writer
-import           Lens.Micro.Platform
+import           Control.Lens
 
 import Glam.Term
 import Glam.Type
@@ -30,14 +31,12 @@ makeLenses ''GlamState
 
 type MonadGlam = MonadState GlamState
 
-initialGlamState :: GlamState
 initialGlamState = GlamState Map.empty Map.empty
 
 runGlamT :: Monad m => StateT GlamState m a -> m a
 runGlamT a = evalStateT a initialGlamState
 
-runGlam :: State GlamState a -> a
-runGlam a = evalState a initialGlamState
+runGlam = runIdentity . runGlamT
 
 eval :: MonadGlam m => Term -> m Term
 eval t = do
@@ -47,10 +46,9 @@ eval t = do
 evalType :: (MonadGlam m, MonadError String m) => Maybe (TVar, [TVar]) -> Polytype -> m Polytype
 evalType self (Forall as ty) = do
     ty' <- runReaderT (desugar ty) env
-    return $ Forall as if | Just (x, _) <- self, x `freeInType` ty' -> TFix x ty'
-                          | otherwise                               -> ty'
+    return $ Forall as (autoTFix ty')
     where
-    env = Set.fromList (maybe [] snd self ++ as)
+    env = Set.fromList (maybe [] snd self ++ map fst as)
     desugar ty@TVar{}     = apply ty []
     desugar ty@TApp{}     = apply ty []
     desugar (ta :*: tb)   = (:*:) <$> desugar ta <*> desugar tb
@@ -79,6 +77,8 @@ evalType self (Forall as ty) = do
                     show (length tys) ++ ", expecting " ++ show (length args)
             Nothing -> throwError $ "unbound type constructor " ++ x
     apply ty _ = throwError $ "not a type constructor: " ++ show ty
+    autoTFix ty | Just (x, _) <- self, x `freeInType` ty = TFix x ty
+                | otherwise                              = ty
 
 getWords :: MonadGlam m => m [Var]
 getWords = liftA2 (<>) (Map.keys <$> use termBindings)
@@ -91,7 +91,7 @@ getType s = runExceptT do
 statement :: Parser Statement
 statement = typeDef <|> signature <|> uncurry Def <$> binding <|> Eval <$> term
     where
-    typeDef = TypeDef <$ "type" <*> typeVariable <*> many typeVariable <* equal <*> type_
+    typeDef = TypeDef <$ "type" <*> tVar <*> many tVar <* equal <*> type_
     signature = try (Signature <$> variable <* colon) <*> polytype
 
 file :: Parser [Statement]
@@ -112,23 +112,19 @@ runStatement (Signature x ty) = do
     termBindings.at x ?= (Nothing, ty')
 runStatement (Def x t) = do
     ty <- use (termBindings.at x) >>= \case
-        Just (_, ty) -> checkType ty t
-        Nothing -> do inferType t
+        Just (_, ty) -> ty <$ checkType ty t
+        Nothing -> inferType t
     t' <- eval t
     termBindings.at x ?= (Just t', ty)
+    tell [x ++ " : " ++ show ty]
 runStatement (Eval t) = do
-    inferType t
+    ty <- inferType t
     t' <- eval t
-    tell [show t']
+    tell [show t' ++ " : " ++ show ty]
 
 initialEnvironment :: MonadGlam m => m Environment
 initialEnvironment = Map.mapMaybe (\(t, ty) -> (ty, True) <$ t) <$> use termBindings
 
-checkType ty t = do
-    runInferT ((t !:) =<< instantiate ty) =<< initialEnvironment
-    return ty
+checkType ty t = runInferT ((t !:) =<< instantiate ty) =<< initialEnvironment
 
-inferType t = do
-    ty <- runInferT (generalise =<< (t ?:)) =<< initialEnvironment
-    -- unless (isClosed ty) $ throwError $ "ambiguous type " ++ show ty
-    return ty
+inferType t = runInferT (generalise =<< (t ?:)) =<< initialEnvironment

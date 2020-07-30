@@ -1,6 +1,11 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Glam.Inference where
 
+import Debug.Trace
+import           Data.Foldable
 import           Data.Traversable
 import           Data.Map (Map)
 import qualified Data.Map as Map
@@ -10,7 +15,7 @@ import           Control.Applicative
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Lens.Micro.Platform
+import           Control.Lens hiding (Fold)
 
 import Glam.Term
 import Glam.Type
@@ -18,12 +23,17 @@ import Glam.Type
 infix 1 |-
 (|-) = local
 
-data InferState = InferState { _unifier :: Map TVar Type
-                             , _tvars :: [TVar] }
+instance {-# OVERLAPPABLE #-} MonadReader r m => MonadReader r (ReaderT r' m) where
+    ask = lift ask
+    local = mapReaderT . local
+
+data InferState = InferState { _unifier :: Map TVar Type  -- The unifying substitution; maps unification variables to the type they are bound to
+                             , _constantTVars :: Set TVar -- A set of unification variables that can only represent constant types
+                             , _tvars :: [TVar] }         -- A list of fresh type variables
 
 makeLenses ''InferState
 
-initialInferState = InferState Map.empty tvars
+initialInferState = InferState Map.empty Set.empty tvars
     where tvars = ['\'':x | n <- [1..], x <- replicateM n ['a'..'z']]
 
 type Environment = Map Var (Polytype, Bool)
@@ -39,47 +49,69 @@ freshTVar :: MonadInfer m => m Type
 freshTVar = TVar . head <$> (tvars <<%= tail)
 freshTVars n = replicateM n freshTVar
 
-bindTVar :: MonadInfer m => TVar -> Type -> m ()
-bindTVar x t | t == TVar x = return ()
-             | x `freeInType` t = throwError $
-                 "cannot construct infinite type " ++ x ++ " ~ " ++ show t
-             | otherwise = unifier.at x ?= t
-
 -- Return the canonical form of a type.
-canonical :: MonadInfer m => Type -> m Type
-canonical ty = do
-    unifier <- use unifier
-    let go (TVar x)      = maybe (TVar x) go $ Map.lookup x unifier
-        go (ta :*: tb)   = go ta :*: go tb
-        go (ta :+: tb)   = go ta :+: go tb
-        go (ta :->: tb)  = go ta :->: go tb
-        go (Later ty)    = Later (go ty)
-        go (Constant ty) = Constant (go ty)
-        go (TFix x tf)   = TFix x (go tf)
-        go ty            = ty
-    return (go ty)
+canonical ty = runReaderT (canonical' ty) Set.empty
+canonicalPoly (Forall xs ty) = Forall xs <$> runReaderT (canonical' ty) (Set.fromList (map fst xs))
 
--- Test whether a term only depends on constant environment variables.
-isConstantTerm :: MonadInfer m => Term -> m Bool
-isConstantTerm t = do
-    env <- ask
-    and <$> traverse constantBinding (Map.restrictKeys env (freeVars t))
-    where
-    constantBinding (_, True) = return True
-    constantBinding (Forall _ ty, False) = do
-        ty' <- canonical ty
-        return (isClosed ty' && isConstant ty')
+canonical' :: MonadInfer m => Type -> ReaderT (Set TVar) m Type
+canonical' (TVar x)     = do
+    s <- asks (Set.member x)
+    if s then return (TVar x) else expandTVar x (return (TVar x)) canonical'
+canonical' (a :*: b)    = (:*:) <$> canonical' a <*> canonical' b
+canonical' (a :+: b)    = (:+:) <$> canonical' a <*> canonical' b
+canonical' (a :->: b)   = (:->:) <$> canonical' a <*> canonical' b
+canonical' (Later t)    = Later <$> canonical' t
+canonical' (Constant t) = Constant <$> canonical' t
+canonical' (TFix x t)   = TFix x <$> local (Set.insert x) (canonical' t)
+canonical' ty           = return ty
 
+-- Instantiate a polytype to a type by replacing polymorphic type variables with unification variables.
 instantiate :: MonadInfer m => Polytype -> m Type
 instantiate (Forall xs ty) = do
     ys <- freshTVars (length xs)
-    return $ substituteType (Map.fromList (zip xs ys)) ty
+    constantTVars <>= Set.fromList [y | ((_, True), TVar y) <- zip xs ys]
+    return $ substituteType (Map.fromList (zip (map fst xs) ys)) ty
 
+-- Generalise a type to a polytype by closing on its variables that aren't free in the environment.
 generalise :: MonadInfer m => Type -> m Polytype
 generalise ty = do
-    ty' <- canonical ty
-    free <- view (each._1.to freeTVars)
-    return $ Forall (Set.toList (freeTVars ty' Set.\\ free)) ty'
+    ty <- canonical ty
+    freeInEnv <- fmap (foldMap freeTVars) . traverse canonicalPoly =<< views (each._1) (\x->[x])
+    constantTVars <- use constantTVars
+    let free = Set.toList (freeTVars ty Set.\\ freeInEnv)
+    return $ Forall [(x, x `Set.member` constantTVars) | x <- free] ty
+
+-- Test whether a type is constant, optionally forcing it by marking its type variables as constant.
+constantType :: MonadInfer m => Bool -> Type -> m Bool
+constantType force (TVar x)
+    | force                    = constantTVars.contains x <.= True
+    | otherwise                = use (constantTVars.contains x)
+constantType force (t1 :*: t2) = liftA2 (&&) (constantType force t1) (constantType force t2)
+constantType force (t1 :+: t2) = liftA2 (&&) (constantType force t1) (constantType force t2)
+constantType force (_ :->: t2) = constantType force t2
+constantType force ty@Later{}
+    | force                    = throwError $ "non-constant type " ++ show ty
+    | otherwise                = return False
+constantType force (TFix _ t)  = constantType force t
+constantType _ _               = return True
+
+-- Test whether a term only depends on constant environment variables.
+constantTerm :: MonadInfer m => Bool -> Term -> m Bool
+constantTerm force t = do
+    env <- ask
+    and <$> traverse isConstantBinding (Map.restrictKeys env (freeVars t))
+    where
+    isConstantBinding (_, True) = return True
+    isConstantBinding (ty, False) = constantType force =<< canonical =<< instantiate ty
+
+bindTVar :: MonadInfer m => TVar -> Type -> m ()
+bindTVar x ty
+    | ty == TVar x = return ()
+    | x `freeInType` ty = throwError $ "cannot construct infinite type " ++ x ++ " ~ " ++ show ty
+    | otherwise = do
+        constant <- use (constantTVars.contains x)
+        when constant $ () <$ constantType True ty -- a constant unification variable can only be unified with a constant type
+        unifier.at x ?= ty
 
 -- Type unification
 infix 5 !~
@@ -136,7 +168,7 @@ InR t !: ty = do
 Case t (Abs x1 t1) (Abs x2 t2) !: ty = do
     ~[ta, tb] <- freshTVars 2
     t !: ta :+: tb
-    constant <- isConstantTerm t
+    constant <- constantTerm False t
     at x1 ?~ (Monotype ta, constant) |- t1 !: ty
     at x2 ?~ (Monotype tb, constant) |- t2 !: ty
 Abs x t !: ty = do
@@ -150,7 +182,7 @@ s :$: t !: ty = do
 Let (Subst s t) !: ty = do
     e <- for s \t' -> do
         ty <- generalise =<< (t' ?:)
-        constant <- isConstantTerm t'
+        constant <- constantTerm False t'
         return (ty, constant)
     Map.union e |- t !: ty
 Fold t !: ty = do
@@ -170,8 +202,7 @@ Next t !: ty = do
     t !: ta
 Prev t !: ty = do
     t !: Later ty
-    constant <- isConstantTerm t
-    unless constant $ throwError $ "non-constant term for prev: " ++ show t
+    () <$ constantTerm True t
 s :<*>: t !: ty = do
     ~[ta, tb] <- freshTVars 2
     ty !~ Later ta
@@ -181,8 +212,7 @@ Box t !: ty = do
     ta <- freshTVar
     ty !~ Constant ta
     t !: ta
-    constant <- isConstantTerm t
-    unless constant $ throwError $ "non-constant term for box: " ++ show t
+    () <$ constantTerm True t
 Unbox t !: ty = t !: Constant ty
 
 -- Type inference
