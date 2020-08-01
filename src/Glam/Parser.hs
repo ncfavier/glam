@@ -31,7 +31,7 @@ alpha :: Parser Char
 alpha = letterChar <|> char '_'
 
 isRest :: Char -> Bool
-isRest c = c == '\'' || isDigit c || isAlpha c
+isRest c = c == '\'' || c == '_' || isDigit c || isAlpha c
 
 lexeme :: Parser a -> Parser a
 lexeme p = do

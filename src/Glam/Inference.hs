@@ -4,7 +4,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Glam.Inference where
 
-import Debug.Trace
 import           Data.Foldable
 import           Data.Traversable
 import           Data.Map (Map)
@@ -33,14 +32,12 @@ data InferState = InferState { _unifier :: Map TVar Type  -- The unifying substi
 
 makeLenses ''InferState
 
-initialInferState = InferState Map.empty Set.empty tvars
-    where tvars = ['\'':x | n <- [1..], x <- replicateM n ['a'..'z']]
-
 type Environment = Map Var (Polytype, Bool)
 
 type MonadInfer m = (MonadState InferState m, MonadReader Environment m, MonadError String m)
 
-runInferT a env = runReaderT (evalStateT a initialInferState) env
+runInferT a xs env = runReaderT (evalStateT a initialInferState) env
+    where initialInferState = InferState Map.empty Set.empty (freshTVarsFor xs)
 
 expandTVar :: MonadInfer m => TVar -> m a -> (Type -> m a) -> m a
 expandTVar x a b = maybe a b =<< use (unifier.at x)

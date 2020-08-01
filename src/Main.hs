@@ -21,7 +21,7 @@ err = liftIO . hPutStrLn stderr
 
 usage = "usage: glam [options...] files..."
 
-options = [Option ['i'] ["interactive"] (NoArg ()) "run in interactive mode"]
+options = [Option ['i'] ["interactive"] (NoArg ()) "run in interactive mode (default if no files provided)"]
 
 parseArgs = do
     args <- getArgs
@@ -42,7 +42,7 @@ settings = Settings { complete = comp
 
 prompt = "> "
 
-greet = putStrLn "glam, the guarded λ-calculus (https://git.monade.li/glam)"
+greet = putStrLn "glam, the guarded λ-calculus (https://github.com/ncfavier/glam)"
 
 main = runGlamT do
     (interactive, fs) <- liftIO parseArgs

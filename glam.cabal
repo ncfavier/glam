@@ -4,8 +4,8 @@ name:                glam
 version:             0.0
 synopsis:            The guarded λ-calculus
 description:
-  A simple implementation of Clouston, Bizjak, Bugge and Birkedal's guarded λ-calculus.
-homepage:            https://git.monade.li/glam
+  An implementation of Clouston, Bizjak, Bugge and Birkedal's guarded λ-calculus.
+homepage:            https://github.com/ncfavier/glam
 license:             ISC
 license-file:        LICENSE
 author:              Naïm Favier
@@ -14,9 +14,9 @@ category:            Compilers/Interpreters
 
 source-repository head
   type:              git
-  location:          https://git.monade.li/glam
+  location:          https://github.com/ncfavier/glam
 
-common glam
+executable glam
   build-depends:
     base >= 4.12.0.0,
     containers,
@@ -25,6 +25,12 @@ common glam
     parser-combinators,
     lens
   hs-source-dirs:      src
+  other-modules:
+    Glam.Term
+    Glam.Type
+    Glam.Parser
+    Glam.Interpreter
+    Glam.Inference
   default-language:    Haskell2010
   default-extensions:
     NamedFieldPuns
@@ -42,17 +48,6 @@ common glam
   ghc-options:         -Wunused-matches
   ghcjs-options:       -dedupe
 
-library
-  import: glam
-  exposed-modules:
-    Glam.Term
-    Glam.Type
-    Glam.Parser
-    Glam.Interpreter
-    Glam.Inference
-
-executable glam
-  import: glam
   if impl(ghcjs)
     main-is: MainJS.hs
     build-depends:
@@ -62,9 +57,3 @@ executable glam
     build-depends:
       haskeline,
       monad-loops
-  other-modules:
-    Glam.Term
-    Glam.Type
-    Glam.Parser
-    Glam.Interpreter
-    Glam.Inference

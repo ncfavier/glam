@@ -1,9 +1,0 @@
-- optional curlies and semicolons (haskell-style layout)
-- base types (integers, booleans, ...) and operations
-- infix operators
-- idiom brackets or !(notation) or something
-- standard library (streams, ...)
-- cons/destructor generation, pattern matching
-- better user interaction with streams
-- call-by-need?
-- write documentation

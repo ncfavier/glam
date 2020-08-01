@@ -41,18 +41,10 @@ data Polytype = Forall [(TVar, Bool)] Type
 pattern Monotype ty = Forall [] ty
 
 class Types t where
-    isValid :: t -> Bool
     freeTVars :: t -> Set TVar
+    allTVars :: t -> Set TVar
 
 instance Types Type where
-    isValid (t1 :*: t2)  = isValid t1 && isValid t2
-    isValid (t1 :+: t2)  = isValid t1 && isValid t2
-    isValid (t1 :->: t2) = isValid t1 && isValid t2
-    isValid (Later t)    = isValid t
-    isValid (Constant t) = isValid t && isClosed t
-    isValid (TFix x t)   = isValid t && x `guardedIn` t
-    isValid _            = True
-
     freeTVars (TVar x)     = Set.singleton x
     freeTVars (t1 :*: t2)  = freeTVars t1 <> freeTVars t2
     freeTVars (t1 :+: t2)  = freeTVars t1 <> freeTVars t2
@@ -61,36 +53,30 @@ instance Types Type where
     freeTVars (Constant t) = freeTVars t
     freeTVars (TFix x t)   = Set.delete x (freeTVars t)
     freeTVars _            = Set.empty
+    allTVars (TVar x)     = Set.singleton x
+    allTVars (t1 :*: t2)  = allTVars t1 <> allTVars t2
+    allTVars (t1 :+: t2)  = allTVars t1 <> allTVars t2
+    allTVars (t1 :->: t2) = allTVars t1 <> allTVars t2
+    allTVars (Later t)    = allTVars t
+    allTVars (Constant t) = allTVars t
+    allTVars (TFix x t)   = Set.insert x (allTVars t)
+    allTVars _            = Set.empty
 
 instance Types Polytype where
-    isValid (Forall _ ty) = isValid ty
     freeTVars (Forall (map fst -> xs) ty) = freeTVars ty Set.\\ Set.fromList xs
+    allTVars (Forall (map fst -> xs) ty) = allTVars ty <> Set.fromList xs
 
 x `freeInType` t = x `Set.member` freeTVars t
 
-isClosed t = Set.null (freeTVars t)
-
-guardedIn :: TVar -> Type -> Bool
-x `guardedIn` TVar y       = x /= y
-_ `guardedIn` TInt         = True
-_ `guardedIn` One          = True
-x `guardedIn` (t1 :*: t2)  = x `guardedIn` t1 && x `guardedIn` t2
-_ `guardedIn` Zero         = True
-x `guardedIn` (t1 :+: t2)  = x `guardedIn` t1 && x `guardedIn` t2
-x `guardedIn` (t1 :->: t2) = x `guardedIn` t1 && x `guardedIn` t2
-_ `guardedIn` Later _      = True
-x `guardedIn` Constant t   = x `guardedIn` t
-x `guardedIn` TFix y t     = x == y || x `guardedIn` t
-
-freshTVarFor :: Set TVar -> [TVar]
-freshTVarFor vs = [v | n <- [1..]
-                     , v <- replicateM n ['a'..'z']
-                     , v `Set.notMember` vs]
+freshTVarsFor :: Set TVar -> [TVar]
+freshTVarsFor xs = [x | n <- [1..]
+                      , x <- replicateM n ['a'..'z']
+                      , x `Set.notMember` xs]
 
 avoidCaptureType vs ty@(TFix x tf)
     | x `Set.member` vs = TFix y (substituteType1 x (TVar y) tf)
     | otherwise = ty
-    where y:_ = freshTVarFor (vs <> freeTVars ty)
+    where y:_ = freshTVarsFor (vs <> freeTVars ty)
 
 substituteType :: TSubst -> Type -> Type
 substituteType s (TVar x) = Map.findWithDefault (TVar x) x s
