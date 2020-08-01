@@ -37,33 +37,33 @@ Alternatively, an [online demo](https://glam.monade.li/) is available.
 The syntax for terms is as follows:
 
 ```
-Var → [a-zA-Z_] [a-zA-Z_0-9']* ; (excluding keywords)
-Integer → [0-9]+
-Lambda → "λ" | "\"
-Binary → "+" | "-" | "<$>" | "<*>"
-Unary → "fst" | "snd"
+Var = [a-zA-Z_] [a-zA-Z_0-9']* ; (excluding keywords)
+Integer = [0-9]+
+Lambda = "λ" | "\"
+Binary = "+" | "-" | "<$>" | "<*>"
+Unary = "fst" | "snd"
       | "abort" | "left" | "right"
       | "fold" | "unfold"
       | "next" | "prev"
       | "box" | "unbox"
 
-Term → "(" Term ")"
+Term = "(" Term ")"
      | Var                                  ; variables
      | Integer                              ; integers
+     | "(" Term "," Term ")"                ; pairs
+     | "(" ")"                              ; unit
      | Term Term                            ; applications
      | Term Binary Term                     ; binary operators
      | Unary Term                           ; unary operators
      | Lambda Var+ "." Term                 ; λ-abstractions
      | "fix" Var+ "." Term                  ; fixed points
+     | "let" "{" ";"-separated(TermDef) "}" ; let expressions
+       "in" Term
      | "case" Term "of" "{"                 ; case expressions
        "left" Var "." Term ";"
        "right" Var "." Term "}"
-     | "let" "{" ";"-separated(TermDef) "}" ; let expressions
-       "in" Term
-     | "(" Term "," Term ")"                ; pairs
-     | "(" ")"                              ; unit
 
-TermDef → Var Var* "=" Term
+TermDef = Var Var* "=" Term
 ```
 
 Some syntactic sugar is provided:
@@ -81,9 +81,9 @@ Some syntactic sugar is provided:
 The syntax for types is as follows:
 
 ```
-TVar → [a-zA-Z_] [a-zA-Z_0-9']* ; (excluding keywords)
+TVar = [a-zA-Z_] [a-zA-Z_0-9']* ; (excluding keywords)
 
-Type → "(" Type ")"
+Type = "(" Type ")"
      | TVar                 ; type variables
      | TVar Type*           ; application of type synonyms
      | "Int"                ; integer type
@@ -96,9 +96,9 @@ Type → "(" Type ")"
      | "#" Type             ; Constant types
      | "Fix" TVar+ "." Type ; fixed point types
 
-TypeDef → "type" TVar TVar* "=" Type ; type synonyms
+TypeDef = "type" TVar TVar* "=" Type ; type synonyms
 
-Polytype → ("forall" ("#"? TVar)+ ".")? Type
+Polytype = ("forall" ("#"? TVar)+ ".")? Type
 ```
 
 Some syntactic sugar is provided:
@@ -115,14 +115,14 @@ Due to the absence of type-level lambdas, type synonyms must be applied to exact
 **glam** programs are structured as follows:
 
 ```
-Signature → Var ":" Polytype
+Signature = Var ":" Polytype
 
-Statement → TypeDef
+Statement = TypeDef
           | Signature
           | TermDef
           | Term
 
-Program → newline-separated(Statement)
+Program = newline-separated(Statement)
 ```
 
 Statements can span over multiple lines, provided that subsequent lines are indented further than the first line.
