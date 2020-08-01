@@ -192,7 +192,7 @@ CodeMirror.defineMode("glam", function(_config, modeConfig) {
       "next", "prev", "box", "unbox", "fold", "unfold", "fst", "snd", "abort", "left", "right");
 
     setType("builtin")(
-      "<*>", "<$>");
+      "<*>", "<$>", "+", "-");
 
     var override = modeConfig.overrideKeywords;
     if (override) for (var word in override) if (override.hasOwnProperty(word))

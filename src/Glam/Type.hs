@@ -123,7 +123,7 @@ instance Show Polytype where
 -- Parsing
 
 tVar :: Parser TVar
-tVar = mkIdentifier ["Fix", "Int", "forall"]
+tVar = mkIdentifier ["type", "Fix", "Int", "forall"]
 
 type_ :: Parser Type
 type_ = tfix <|> makeExprParser base ops <?> "type"
