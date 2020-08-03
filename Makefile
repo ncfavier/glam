@@ -23,5 +23,5 @@ www/glam.min.js: $(dist)/all.js $(dist)/all.js.externs
 		--externs $(dist)/all.js.externs --js $< --js_output_file $@
 
 www/index.html: www/index.template.html FORCE
-	naturals=$$(< examples/naturals.glam) fibonacci=$$(< examples/fibonacci.glam) \
-	    envsubst '$$naturals$$fibonacci$$glamjs' < $< > $@
+	naturals=$$(< examples/naturals.glam) fibonacci=$$(< examples/fibonacci.glam) y=$$(< examples/y.glam) \
+	    envsubst '$$naturals$$fibonacci$$y$$glamjs' < $< > $@

@@ -110,6 +110,19 @@ head (tail fib)
 head (tail (tail fib))
 head (tail (tail (tail fib)))
 head (tail (tail (tail (tail fib))))</script>
+        <script id=y-txt type="text/plain">-- A guarded variant of Curry's Y combinator.
+
+type Mu a = >Mu a -> a
+
+Mu : forall a. (>Mu a -> a) -> Mu a
+Mu x = fold x
+
+uM : forall a. Mu a -> >Mu a -> a
+uM x = unfold x
+
+Y : forall a. (>a -> a) -> a
+Y f = let { x x' = f (uM <$> x' <*> next x') }
+      in x (next (Mu x))</script>
     </head>
     <body>
         <h1><a id=glam href="https://github.com/ncfavier/glam">glam</a>. The guarded λ-calculus</h1>
@@ -118,6 +131,7 @@ head (tail (tail (tail (tail fib))))</script>
             Examples:
             <button id=naturals class=example>Natural numbers</button>
             <button id=fibonacci class=example>Fibonacci sequence</button>
+            <button id=y class=example>Y combinator</button>
         </p>
         <textarea id=input></textarea>
         <p><button id=run>Run</button></p>
