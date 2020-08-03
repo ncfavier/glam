@@ -178,9 +178,9 @@ Consider the following motivating examples:
 
 We solve these two problems simultaneously by introducing (environment-dependent) notions of **constant terms** and **constantly bound variables**, defined as follows:
 - A term is constant if each of its free variables is either constantly bound or has a constant type.
-- A variable that is `let`-bound to a constant term is constantly bound (this includes top-level bindings; as a consequence, all top-level bound variables are constantly bound). Similarly, a variable bound in a `case` expression from matching on a constant term is constantly bound. This makes the examples above type-check as expected.
+- A variable that is `let`-bound to a constant term is constantly bound (this includes top-level bindings; as a consequence, all top-level bound variables are constantly bound). Similarly, a variable bound in a `case` expression from matching on a constant term is constantly bound.
 
-The `box t` and `prev t` constructs require `t` to be a constant term.
+The `box t` and `prev t` constructs require `t` to be a constant term. This makes the examples above type-check as expected.
 
 ## Bugs and future work
 
