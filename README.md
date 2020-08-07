@@ -12,7 +12,7 @@ Please refer to that paper for basic motivation and introduction to the language
 - [Evaluation](#evaluation)
 - [Type system](#type-system)
   - [Polymorphism](#polymorphism)
-  - [Constant terms](#constant-terms)
+  - [Automatic boxing](#automatic-boxing)
 - [Bugs and future work](#bugs-and-future-work)
 
 ## Usage
@@ -162,7 +162,7 @@ The definition of **constant types** has also been modified as follows:
 
 Just like in standard Hindley-Milner, polymorphic generalisation only occurs for `let`-bound terms (but not inside recursive definitions).
 
-### Constant terms
+### Automatic boxing
 
 Consider the following motivating examples:
 
@@ -176,11 +176,11 @@ Consider the following motivating examples:
   ```
   Again, this would not be allowed, because `a` and `b` have the potentially non-constant types `a` and `b`.
 
-We solve these two problems simultaneously by introducing (environment-dependent) notions of **constant terms** and **constantly bound variables**, defined as follows:
-- A term is constant if each of its free variables is either constantly bound or has a constant type.
-- A variable that is `let`-bound to a constant term is constantly bound (this includes top-level bindings; as a consequence, all top-level bound variables are constantly bound). Similarly, a variable bound in a `case` expression from matching on a constant term is constantly bound.
+We solve these two problems simultaneously by introducing (environment-dependent) notions of **boxable terms** and **boxed variables**, defined as follows:
+- A term is boxable if each of its free variables is either boxed or has a constant type.
+- A variable that is `let`-bound to a boxable term is automatically boxed (this includes top-level bindings; as a consequence, all top-level bound variables are boxed). Similarly, a variable bound in a `case` expression from matching on a boxable term is boxed.
 
-The `box t` and `prev t` constructs require `t` to be a constant term. This makes the examples above type-check as expected.
+The `box t` and `prev t` constructs require `t` to be boxable. This makes the examples above type-check as expected.
 
 ## Bugs and future work
 
