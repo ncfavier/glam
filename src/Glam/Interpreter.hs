@@ -134,5 +134,4 @@ initialEnvironment :: MonadGlam m => m Environment
 initialEnvironment = Map.mapMaybe (\(t, ty) -> (ty, True) <$ t) <$> use termBindings
 
 checkType ty t = runInferT ((t !:) =<< instantiate ty) (allTVars ty) =<< initialEnvironment
-
-inferType t = runInferT (generalise =<< (t ?:)) Set.empty =<< initialEnvironment
+inferType    t = runInferT ((t ?:) >>= generalise)     Set.empty     =<< initialEnvironment
