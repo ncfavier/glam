@@ -9,7 +9,6 @@ module Glam.Parser (
 import           Control.Monad.Combinators.Expr
 import           Control.Monad.Reader
 import           Data.Bifunctor (first)
-import qualified Data.Map as Map (fromList)
 import           Data.Char
 import           Data.String
 import           Data.Void

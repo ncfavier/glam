@@ -4,7 +4,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Glam.Inference where
 
-import           Data.Foldable
 import           Data.Traversable
 import           Data.Map (Map)
 import qualified Data.Map as Map

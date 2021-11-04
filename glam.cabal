@@ -45,7 +45,7 @@ executable glam
     FlexibleContexts
     ConstraintKinds
     NoMonomorphismRestriction
-  ghc-options:         -Wunused-matches
+  ghc-options:         -W -fno-warn-incomplete-patterns
   ghcjs-options:       -dedupe
 
   if impl(ghcjs)
