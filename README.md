@@ -40,7 +40,7 @@ The syntax for terms is as follows:
 Var = [a-zA-Z_] [a-zA-Z_0-9']* ; (excluding keywords)
 Integer = [0-9]+
 Lambda = "λ" | "\"
-Binary = "+" | "-" | "<$>" | "<*>"
+Binary = "+" | "-" | "*" | "/" | "<$>" | "<*>"
 Unary = "fst" | "snd"
       | "abort" | "left" | "right"
       | "fold" | "unfold"

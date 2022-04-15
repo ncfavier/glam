@@ -20,7 +20,7 @@ data Term =
     -- Variables
       Var Var
     -- Integers
-    | Int Integer | Plus Term Term | Minus Term Term
+    | Int Integer | Plus Term Term | Minus Term Term | Times Term Term | Divide Term Term
     -- Products
     | Unit | Pair Term Term | Fst Term | Snd Term
     -- Sums
@@ -46,6 +46,8 @@ freeVars (Var x)        = Set.singleton x
 freeVars (Int _)        = Set.empty
 freeVars (Plus t1 t2)   = freeVars t1 <> freeVars t2
 freeVars (Minus t1 t2)  = freeVars t1 <> freeVars t2
+freeVars (Times t1 t2)  = freeVars t1 <> freeVars t2
+freeVars (Divide t1 t2) = freeVars t1 <> freeVars t2
 freeVars Unit           = Set.empty
 freeVars (Pair t1 t2)   = freeVars t1 <> freeVars t2
 freeVars (Fst t)        = freeVars t
@@ -101,6 +103,8 @@ substitute s (Var x)        = Map.findWithDefault (Var x) x s
 substitute _ (Int i)        = Int i
 substitute s (Plus t1 t2)   = Plus (substitute s t1) (substitute s t2)
 substitute s (Minus t1 t2)  = Minus (substitute s t1) (substitute s t2)
+substitute s (Times t1 t2)  = Times (substitute s t1) (substitute s t2)
+substitute s (Divide t1 t2) = Divide (substitute s t1) (substitute s t2)
 substitute _ Unit           = Unit
 substitute s (Pair t1 t2)   = Pair (substitute s t1) (substitute s t2)
 substitute s (Fst t)        = Fst (substitute s t)
@@ -137,6 +141,8 @@ reduce (Abs x t :$: s)              = Just (substitute1 x s t)
 reduce (Let (Subst s t))            = Just (substitute s t)
 reduce (Int a `Plus` Int b)         = Just (Int (a + b))
 reduce (Int a `Minus` Int b)        = Just (Int (a - b))
+reduce (Int a `Times` Int b)        = Just (Int (a * b))
+reduce (Int a `Divide` Int b)       = Just (Int (a `div` b))
 reduce (Fst (Pair t1 _))            = Just t1
 reduce (Snd (Pair _ t2))            = Just t2
 reduce (Case (InL t) (Abs x1 t1) _) = Just (substitute1 x1 t t1)
@@ -152,6 +158,10 @@ reduce (Plus t1 t2)   | Just t1' <- reduce t1 = Just (Plus t1' t2)
                       | Just t2' <- reduce t2 = Just (Plus t1 t2')
 reduce (Minus t1 t2)  | Just t1' <- reduce t1 = Just (Minus t1' t2)
                       | Just t2' <- reduce t2 = Just (Minus t1 t2')
+reduce (Times t1 t2)  | Just t1' <- reduce t1 = Just (Times t1' t2)
+                      | Just t2' <- reduce t2 = Just (Times t1 t2')
+reduce (Divide t1 t2) | Just t1' <- reduce t1 = Just (Divide t1' t2)
+                      | Just t2' <- reduce t2 = Just (Divide t1 t2')
 reduce (Fst t)        | Just t' <- reduce t   = Just (Fst t')
 reduce (Snd t)        | Just t' <- reduce t   = Just (Snd t')
 reduce (Case t t1 t2) | Just t' <- reduce t   = Just (Case t' t1 t2)
@@ -190,6 +200,10 @@ instance Show Term where
         showsPrec plusPrec t1 . showString " + " . showsPrec (plusPrec + 1) t2
     showsPrec d (t1 `Minus` t2) = showParen (d > plusPrec) $
         showsPrec plusPrec t1 . showString " - " . showsPrec (plusPrec + 1) t2
+    showsPrec d (t1 `Times` t2) = showParen (d > plusPrec) $
+        showsPrec plusPrec t1 . showString " * " . showsPrec (plusPrec + 1) t2
+    showsPrec d (t1 `Divide` t2) = showParen (d > plusPrec) $
+        showsPrec plusPrec t1 . showString " / " . showsPrec (plusPrec + 1) t2
     showsPrec _ Unit = showString "()"
     showsPrec _ (Pair t1 t2) = showParen True $
         shows t1 . showString ", " . shows t2
@@ -262,7 +276,8 @@ term = choice [abs_, fix__, case_, letIn, makeExprParser base ops] <?> "term"
     unary = choice [f <$ hidden (keyword w) | (w, f) <- unaries]
     ops = [ [ InfixL (pure (:$:))
             , Prefix (foldr1 (.) <$> some unary) ]
-          , [ InfixL (Plus <$ symbol "+"), InfixL (Minus <$ symbol "-") ]
+          , [ InfixL (Plus <$ symbol "+"), InfixL (Minus <$ symbol "-")
+            , InfixL (Times <$ symbol "*"), InfixL (Divide <$ symbol "/") ]
           , [ InfixL ((:<*>:)        <$ symbol "<*>")
             , InfixL ((:<*>:) . Next <$ symbol "<$>") ] ]
 

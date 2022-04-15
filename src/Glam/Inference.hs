@@ -140,6 +140,14 @@ Minus a b !: ty = do
     a !: TInt
     b !: TInt
     ty !~ TInt
+Times a b !: ty = do
+    a !: TInt
+    b !: TInt
+    ty !~ TInt
+Divide a b !: ty = do
+    a !: TInt
+    b !: TInt
+    ty !~ TInt
 Unit !: ty = ty !~ One
 Pair a b !: ty = do
     ~[ta, tb] <- freshTVars 2
