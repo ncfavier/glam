@@ -42,6 +42,7 @@
 
             .CodeMirror {
                 height: 400px;
+                font-family: monospace;
             }
 
             #output {
@@ -110,6 +111,41 @@ head (tail fib)
 head (tail (tail fib))
 head (tail (tail (tail fib)))
 head (tail (tail (tail (tail fib))))</script>
+        <script id=primes-txt type="text/plain">-- Guarded recursive streams
+type StreamG a = a * >StreamG a
+
+consG : forall a. a -> >StreamG a -> StreamG a
+consG x s = fold (x, s)
+
+headG : forall a. StreamG a -> a
+headG s = fst unfold s
+
+tailG : forall a. StreamG a -> >StreamG a
+tailG s = snd unfold s
+
+mapG f = let { go s = consG (f (headG s)) (go <*> tailG s) }
+         in go
+
+scanl1G f = let { go s = consG (headG s) (mapG (f (headG s)) <$> (go <*> tailG s)) }
+            in go
+
+-- Coinductive streams
+type Stream a = #StreamG a
+
+cons x s = box (consG x (next unbox s))
+head s = headG unbox s
+tail s = box prev (tailG unbox s)
+
+-- An infinite stream of prime numbers, as used in Euclid's proof of infinitude
+primesG = consG 2 (mapG (\x. x + 1) <$> (scanl1G (\x y. x * y) <$> primesG))
+primes = box primesG
+
+-- Print the first five primes in the sequence
+head primes
+head (tail primes)
+head (tail (tail primes))
+head (tail (tail (tail primes)))
+head (tail (tail (tail (tail primes))))</script>
         <script id=y-txt type="text/plain">-- A guarded variant of Curry's Y combinator.
 
 type Mu a = >Mu a -> a
@@ -131,6 +167,7 @@ Y f = let { x x' = f (uM <$> x' <*> next x') }
             Examples:
             <button id=naturals class=example>Natural numbers</button>
             <button id=fibonacci class=example>Fibonacci sequence</button>
+            <button id=primes class=example>Prime numbers</button>
             <button id=y class=example>Y combinator</button>
         </p>
         <textarea id=input></textarea>

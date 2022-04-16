@@ -1,0 +1,35 @@
+-- Guarded recursive streams
+type StreamG a = a * >StreamG a
+
+consG : forall a. a -> >StreamG a -> StreamG a
+consG x s = fold (x, s)
+
+headG : forall a. StreamG a -> a
+headG s = fst unfold s
+
+tailG : forall a. StreamG a -> >StreamG a
+tailG s = snd unfold s
+
+mapG f = let { go s = consG (f (headG s)) (go <*> tailG s) }
+         in go
+
+scanl1G f = let { go s = consG (headG s) (mapG (f (headG s)) <$> (go <*> tailG s)) }
+            in go
+
+-- Coinductive streams
+type Stream a = #StreamG a
+
+cons x s = box (consG x (next unbox s))
+head s = headG unbox s
+tail s = box prev (tailG unbox s)
+
+-- An infinite stream of prime numbers, as used in Euclid's proof of infinitude
+primesG = consG 2 (mapG (\x. x + 1) <$> (scanl1G (\x y. x * y) <$> primesG))
+primes = box primesG
+
+-- Print the first five primes in the sequence
+head primes
+head (tail primes)
+head (tail (tail primes))
+head (tail (tail (tail primes)))
+head (tail (tail (tail (tail primes))))

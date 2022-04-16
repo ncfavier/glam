@@ -23,5 +23,8 @@ docs/glam.min.js: $(dist)/all.js $(dist)/all.js.externs
 		--externs $(dist)/all.js.externs --js $< --js_output_file $@
 
 docs/index.html: docs/index.template.html FORCE
-	naturals=$$(< examples/naturals.glam) fibonacci=$$(< examples/fibonacci.glam) y=$$(< examples/y.glam) \
-	    envsubst '$$naturals$$fibonacci$$y$$glamjs' < $< > $@
+	naturals=$$(< examples/naturals.glam) \
+	fibonacci=$$(< examples/fibonacci.glam) \
+	primes=$$(< examples/primes.glam) \
+	y=$$(< examples/y.glam) \
+	    envsubst '$$naturals$$fibonacci$$primes$$y$$glamjs' < $< > $@
