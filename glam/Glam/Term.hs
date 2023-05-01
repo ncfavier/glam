@@ -1,9 +1,9 @@
 module Glam.Term where
 
-import           Control.Monad (replicateM)
+import           Data.Function
 import           Data.List
-import           Data.Map (Map)
-import qualified Data.Map as Map
+import           Data.Map.Lazy (Map)
+import qualified Data.Map.Lazy as Map
 import           Data.Set (Set)
 import qualified Data.Set as Set
 
@@ -68,117 +68,66 @@ freeVars (t1 :<*>: t2)  = freeVars t1 <> freeVars t2
 freeVars (Box t)        = freeVars t
 freeVars (Unbox t)      = freeVars t
 
-freeIn :: Var -> Term -> Bool
-x `freeIn` t = x `Set.member` freeVars t
-
 freeVarsSubst :: Subst -> Set Var
 freeVarsSubst = foldMap freeVars
 
 freeVarsDelayed :: Delayed -> Set Var
 freeVarsDelayed (Subst s t) = freeVarsSubst s <> (freeVars t Set.\\ Map.keysSet s)
 
-freshVarFor :: Set Var -> [Var]
-freshVarFor vs = [v | n <- [1..]
-                    , v <- replicateM n ['a'..'z']
-                    , v `Set.notMember` vs]
-
--- Alpha-renames an abstraction so as to avoid capturing any of the variables in `vs`.
-avoidCapture vs t@(Abs x u)
-    | x `Set.member` vs = Abs y (substitute1 x (Var y) u)
-    | otherwise = t
-    where y:_ = freshVarFor (vs <> freeVars t)
-
--- Same for a delayed substitution.
-avoidCaptureDelayed vs d@(Subst s t)
-    | not (null conflicts) = Subst s' t'
-    | otherwise = d
-    where conflicts = Map.keys (Map.restrictKeys s vs)
-          renaming = Map.fromList (zip conflicts (freshVarFor (vs <> freeVarsDelayed d <> Map.keysSet s)))
-          s' = Map.mapKeys (\v -> Map.findWithDefault v v renaming) s
-          t' = substitute (Map.map Var renaming) t
-
--- Capture-avoiding substitution.
-substitute :: Subst -> Term -> Term
-substitute s (Var x)        = Map.findWithDefault (Var x) x s
-substitute _ (Int i)        = Int i
-substitute s (Plus t1 t2)   = Plus (substitute s t1) (substitute s t2)
-substitute s (Minus t1 t2)  = Minus (substitute s t1) (substitute s t2)
-substitute s (Times t1 t2)  = Times (substitute s t1) (substitute s t2)
-substitute s (Divide t1 t2) = Divide (substitute s t1) (substitute s t2)
-substitute _ Unit           = Unit
-substitute s (Pair t1 t2)   = Pair (substitute s t1) (substitute s t2)
-substitute s (Fst t)        = Fst (substitute s t)
-substitute s (Snd t)        = Snd (substitute s t)
-substitute s (Abort t)      = Abort (substitute s t)
-substitute s (InL t)        = InL (substitute s t)
-substitute s (InR t)        = InR (substitute s t)
-substitute s (Case t t1 t2) = Case (substitute s t) (substitute s t1) (substitute s t2)
-substitute s t@Abs{}        = Abs x (substitute (Map.delete x s) u)
-    where Abs x u = avoidCapture (freeVarsSubst s) t
-substitute s (t1 :$: t2)    = substitute s t1 :$: substitute s t2
-substitute s (Let d)        = Let (substituteDelayed s d)
-substitute s (Fold t)       = Fold (substitute s t)
-substitute s (Unfold t)     = Unfold (substitute s t)
-substitute s (Fix t)        = Fix (substitute s t)
-substitute s (Next t)       = Next (substitute s t)
-substitute s (Prev t)       = Prev (substitute s t)
-substitute s (t1 :<*>: t2)  = substitute s t1 :<*>: substitute s t2
-substitute s (Box t)        = Box (substitute s t)
-substitute s (Unbox t)      = Unbox (substitute s t)
-
-substituteDelayed :: Subst -> Delayed -> Delayed
-substituteDelayed s d = Subst (substitute s <$> s') (substitute (s Map.\\ s') t)
-    where Subst s' t = avoidCaptureDelayed (freeVarsSubst s) d
-
-substitute1 x s = substitute (Map.singleton x s)
+freeIn :: Var -> Term -> Bool
+x `freeIn` t = x `Set.member` freeVars t
 
 fix_ x t = Fix (Abs x t)
 
--- Small-step operational semantics for the calculus: performs a single reduction step, if possible.
-reduce :: Term -> Maybe Term
--- Reduction rules
-reduce (Abs x t :$: s)              = Just (substitute1 x s t)
-reduce (Let (Subst s t))            = Just (substitute s t)
-reduce (Int a `Plus` Int b)         = Just (Int (a + b))
-reduce (Int a `Minus` Int b)        = Just (Int (a - b))
-reduce (Int a `Times` Int b)        = Just (Int (a * b))
-reduce (Int a `Divide` Int b)       = Just (Int (a `div` b))
-reduce (Fst (Pair t1 _))            = Just t1
-reduce (Snd (Pair _ t2))            = Just t2
-reduce (Case (InL t) (Abs x1 t1) _) = Just (substitute1 x1 t t1)
-reduce (Case (InR t) _ (Abs x2 t2)) = Just (substitute1 x2 t t2)
-reduce (Unfold (Fold t))            = Just t
-reduce t@(Fix (Abs x t'))           = Just (substitute1 x (Next t) t')
-reduce (Next t1 :<*>: Next t2)      = Just (Next (t1 :$: t2))
-reduce (Unbox (Box t))              = Just t
-reduce (Prev (Next t))              = Just t
--- Context rules (weak call-by-name evaluation)
-reduce (t1 :$: t2)    | Just t1' <- reduce t1 = Just (t1' :$: t2)
-reduce (Plus t1 t2)   | Just t1' <- reduce t1 = Just (Plus t1' t2)
-                      | Just t2' <- reduce t2 = Just (Plus t1 t2')
-reduce (Minus t1 t2)  | Just t1' <- reduce t1 = Just (Minus t1' t2)
-                      | Just t2' <- reduce t2 = Just (Minus t1 t2')
-reduce (Times t1 t2)  | Just t1' <- reduce t1 = Just (Times t1' t2)
-                      | Just t2' <- reduce t2 = Just (Times t1 t2')
-reduce (Divide t1 t2) | Just t1' <- reduce t1 = Just (Divide t1' t2)
-                      | Just t2' <- reduce t2 = Just (Divide t1 t2')
-reduce (Fst t)        | Just t' <- reduce t   = Just (Fst t')
-reduce (Snd t)        | Just t' <- reduce t   = Just (Snd t')
-reduce (Case t t1 t2) | Just t' <- reduce t   = Just (Case t' t1 t2)
-reduce (Unfold t)     | Just t' <- reduce t   = Just (Unfold t')
-reduce (Unbox t)      | Just t' <- reduce t   = Just (Unbox t')
-reduce (Prev t)       | Just t' <- reduce t   = Just (Prev t')
-reduce (t1 :<*>: t2)  | Just t1' <- reduce t1 = Just (t1' :<*>: t2)
-                      | Just t2' <- reduce t2 = Just (t1 :<*>: t2')
-reduce _ = Nothing
+-- Evaluation
 
--- The sequence of reduction steps starting with t.
-reduction :: Term -> [Term]
-reduction t = t:maybe [] reduction (reduce t)
+data Value = VInt Integer
+           | VUnit | VPair Value Value
+           | VInL Value | VInR Value
+           | VAbs (Value -> Value)
+           | VFold Value
+           | VNext Value
+           | VBox Value
 
--- Reduce a term to a (weak) normal form.
-normalise :: Term -> Term
-normalise = last . reduction
+eval :: Map Var Value -> Term -> Value
+eval s (Var x)        = s Map.! x
+eval _ (Int i)        = VInt i
+eval s (Plus t1 t2)   = case (eval s t1, eval s t2) of
+    (VInt i1, VInt i2) -> VInt (i1 + i2)
+eval s (Minus t1 t2)   = case (eval s t1, eval s t2) of
+    (VInt i1, VInt i2) -> VInt (i1 - i2)
+eval s (Times t1 t2)   = case (eval s t1, eval s t2) of
+    (VInt i1, VInt i2) -> VInt (i1 * i2)
+eval s (Divide t1 t2)   = case (eval s t1, eval s t2) of
+    (VInt i1, VInt i2) -> VInt (i1 `div` i2)
+eval _ Unit           = VUnit
+eval s (Pair t1 t2)   = VPair (eval s t1) (eval s t2)
+eval s (Fst t)        = case eval s t of
+    VPair t1 _ -> t1
+eval s (Snd t)        = case eval s t of
+    VPair _ t2 -> t2
+eval _ (Abort _)      = undefined
+eval s (InL t)        = VInL (eval s t)
+eval s (InR t)        = VInR (eval s t)
+eval s (Case t (Abs x1 t1) (Abs x2 t2)) = case eval s t of
+    VInL l -> eval (Map.insert x1 l s) t1
+    VInR r -> eval (Map.insert x2 r s) t2
+eval s (Abs x t)    = VAbs (\ v -> eval (Map.insert x v s) t)
+eval s (t1 :$: t2)    = case eval s t1 of
+    VAbs f -> f (eval s t2)
+eval s (Let (Subst s' t)) = eval (Map.union (eval s <$> s') s) t
+eval s (Fold t)       = VFold (eval s t)
+eval s (Unfold t)     = case eval s t of
+    VFold t -> t
+eval s (Fix (Abs x t)) = fix \ self -> eval (Map.insert x (VNext self) s) t
+eval s (Next t)       = VNext (eval s t)
+eval s (Prev t)       = case eval s t of
+    VNext t -> t
+eval s (t1 :<*>: t2)  = case (eval s t1, eval s t2) of
+    (VNext (VAbs f), VNext t2) -> VNext (f t2)
+eval s (Box t)        = VBox (eval s t)
+eval s (Unbox t)      = case eval s t of
+    VBox t -> t
 
 -- Printing
 
@@ -245,6 +194,23 @@ instance Show Term where
         showString "box " . showsPrec (appPrec + 1) t
     showsPrec d (Unbox t) = showParen (d > appPrec) $
         showString "unbox " . showsPrec (appPrec + 1) t
+
+instance Show Value where
+    showsPrec _ (VInt i) = shows i
+    showsPrec _ VUnit = showString "()"
+    showsPrec _ (VPair t1 t2) = showParen True $
+        shows t1 . showString ", " . shows t2
+    showsPrec d (VInL t) = showParen (d > appPrec) $
+        showString "left " . showsPrec (appPrec + 1) t
+    showsPrec d (VInR t) = showParen (d > appPrec) $
+        showString "right " . showsPrec (appPrec + 1) t
+    showsPrec _ (VAbs _) = showString "<function>"
+    showsPrec d (VFold t) = showParen (d > appPrec) $
+        showString "fold " . showsPrec (appPrec + 1) t
+    showsPrec d (VNext t) = showParen (d > appPrec) $
+        showString "next " . showsPrec (appPrec + 1) t
+    showsPrec d (VBox t) = showParen (d > appPrec) $
+        showString "box " . showsPrec (appPrec + 1) t
 
 -- Parsing
 

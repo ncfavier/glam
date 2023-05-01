@@ -25,7 +25,7 @@ data Statement = TypeDef TVar [TVar] Type
                | Eval Term
                deriving (Eq, Show)
 
-data GlamState = GlamState { _termBindings :: Map Var (Maybe Term, Polytype)
+data GlamState = GlamState { _termBindings :: Map Var (Maybe Value, Polytype)
                            , _typeBindings :: Map TVar ([TVar], Type) }
 
 makeLenses ''GlamState
@@ -39,10 +39,10 @@ runGlamT a = evalStateT a initialGlamState
 
 runGlam = runIdentity . runGlamT
 
-evalTerm :: MonadGlam m => Term -> m Term
+evalTerm :: MonadGlam m => Term -> m Value
 evalTerm t = do
     s <- Map.mapMaybe fst <$> use termBindings
-    return (normalise (substitute s t))
+    return (eval s t)
 
 data FixedStatus = Unguarded | Guarded | Forbidden
 data TVarBinding = Fixed FixedStatus (Maybe [TVar]) | Syn [TVar] Type | Ok

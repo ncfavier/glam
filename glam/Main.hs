@@ -47,6 +47,7 @@ greet = putStrLn "glam, the guarded λ-calculus (https://github.com/ncfavier/gla
 
 main = runGlamT do
     (interactive, fs) <- liftIO parseArgs
+    liftIO $ hSetBuffering stdout NoBuffering
     forM_ fs \f -> do
         let (name, contents) | f == "-"  = ("", getContents)
                              | otherwise = (f, readFile f)

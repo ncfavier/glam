@@ -134,9 +134,8 @@ The interpreter currently prints the (inferred or checked) type for each top-lev
 
 ## Evaluation
 
-The evaluation model is *extremely* naïve: it simply implements the call-by-name operational semantics given by the paper.
-
-In particular, it does not do any sort of sharing, which may result in seemingly simple programs taking up exponential time and space complexity. The `fibonacci.glam` example demonstrates this: computing the 10th Fibonacci number takes about 8 seconds on my machine.
+Terms are evaluated using a call-by-need strategy (piggy-backing on Haskell's), based on the operational semantics given in the paper.
+This is a form of normalisation by evaluation (NbE), except we don't reify values back into terms.
 
 ## Type system
 
@@ -190,8 +189,7 @@ The `box t` and `prev t` constructs require `t` to be boxable. This makes the ex
   ```
   shouldn't type-check.
 - Better type error reporting.
-- Make semicolons and curlies optional using something like Haskell's layout rules.
-- Call-by-name is outrageous. Implement call-by-need.
+- Make semicolons and braces optional using something like Haskell's layout rules.
 - Add infix operators.
 - Make `left`, `right`, `abort`, `fst`, `snd`, `(,)` (the pair former), `fix`, `next`, `(<$>)`, `(<*>)` and `unbox` first-class functions instead of keywords.
 - Proper type constructors and pattern matching.
