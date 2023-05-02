@@ -128,7 +128,7 @@ tVar = mkIdentifier ["type", "Fix", "Int", "forall"]
 type_ :: Parser Type
 type_ = tfix <|> makeExprParser base ops <?> "type"
     where
-    tfix = flip (foldr TFix) <$ "Fix" <*> some tVar <* dot <*> type_
+    tfix = TFix <$ "Fix" <*> tVar <* dot <*> type_
     base =  TInt <$ "Int"
         <|> TVar <$> tVar
         <|> One <$ symbol "1"

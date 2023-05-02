@@ -13,7 +13,7 @@ Please refer to that paper for basic motivation and introduction to the language
 - [Type system](#type-system)
   - [Polymorphism](#polymorphism)
   - [Automatic boxing](#automatic-boxing)
-- [Bugs and future work](#bugs-and-future-work)
+- [To do](#to-do)
 
 ## Usage
 
@@ -106,7 +106,7 @@ Some syntactic sugar is provided:
 | `f x y z = t` | `f = \x y z. t` |
 | `f = ... f ...` | `f = fix f. ... f ...` |
 | `\x y z. t` | `\x. \y. \z. t` |
-| `fix x y z. t` | `fix x. fix y. fix z. t` |
+| `fix x y z. t` | `fix x. \y z. t` |
 | `f <$> x` | `next f <*> x` |
 
 ### Programs
@@ -180,7 +180,7 @@ We solve these two problems simultaneously by introducing (environment-dependent
 
 The `box t` and `prev t` constructs require `t` to be boxable. This makes the examples above type-check as expected.
 
-## Bugs and future work
+## To do
 
 - Better type error reporting.
 - Make semicolons and braces optional using something like Haskell's layout rules.

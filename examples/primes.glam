@@ -10,11 +10,9 @@ headG s = fst unfold s
 tailG : forall a. StreamG a -> >StreamG a
 tailG s = snd unfold s
 
-mapG f = let { go s = consG (f (headG s)) (go <*> tailG s) }
-         in go
+mapG f = fix go s. consG (f (headG s)) (go <*> tailG s)
 
-scanl1G f = let { go s = consG (headG s) (mapG (f (headG s)) <$> (go <*> tailG s)) }
-            in go
+scanl1G f = fix go s. consG (headG s) (mapG (f (headG s)) <$> (go <*> tailG s))
 
 -- Coinductive streams
 type Stream a = #StreamG a

@@ -10,9 +10,7 @@ headG s = fst unfold s
 tailG : forall a. StreamG a -> >StreamG a
 tailG s = snd unfold s
 
-zipWithG f = let { go s1 s2 = consG (f (headG s1) (headG s2))
-                                    (go <*> tailG s1 <*> tailG s2) }
-             in go
+zipWithG f = fix go s1 s2. consG (f (headG s1) (headG s2)) (go <*> tailG s1 <*> tailG s2)
 
 -- Coinductive streams
 type Stream a = #StreamG a

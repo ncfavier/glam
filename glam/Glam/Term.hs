@@ -77,8 +77,6 @@ freeVarsDelayed (Subst s t) = freeVarsSubst s <> (freeVars t Set.\\ Map.keysSet 
 freeIn :: Var -> Term -> Bool
 x `freeIn` t = x `Set.member` freeVars t
 
-fix_ x t = Fix (Abs x t)
-
 -- Evaluation
 
 data Value = VInt Integer
@@ -220,10 +218,10 @@ variable = mkIdentifier
      "fix", "next", "prev", "box", "unbox", "in", "type"]
 
 term :: Parser Term
-term = choice [abs_, fix__, case_, letIn, makeExprParser base ops] <?> "term"
+term = choice [abs_, fix_, case_, letIn, makeExprParser base ops] <?> "term"
     where
     abs_ = flip (foldr Abs) <$ lambda <*> some variable <* dot <*> term
-    fix__ = flip (foldr fix_) <$ "fix" <*> some variable <* dot <*> term
+    fix_ = Fix <$> (flip (foldr Abs) <$ "fix" <*> some variable <* dot <*> term)
     case_ = do
         "case"; t <- term; "of"
         braces do
