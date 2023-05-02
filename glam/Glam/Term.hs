@@ -152,8 +152,8 @@ instance Show Term where
     showsPrec d (t1 `Divide` t2) = showParen (d > plusPrec) $
         showsPrec plusPrec t1 . showString " / " . showsPrec (plusPrec + 1) t2
     showsPrec _ Unit = showString "()"
-    showsPrec _ (Pair t1 t2) = showParen True $
-        shows t1 . showString ", " . shows t2
+    showsPrec d (Pair t1 t2) = showParen (d >= 0) $
+        shows t1 . showString ", " . showsPrec (-1) t2
     showsPrec d (Fst t) = showParen (d > appPrec) $
         showString "fst " . showsPrec (appPrec + 1) t
     showsPrec d (Snd t) = showParen (d > appPrec) $
@@ -196,8 +196,8 @@ instance Show Term where
 instance Show Value where
     showsPrec _ (VInt i) = shows i
     showsPrec _ VUnit = showString "()"
-    showsPrec _ (VPair t1 t2) = showParen True $
-        shows t1 . showString ", " . shows t2
+    showsPrec d (VPair t1 t2) = showParen (d >= 0) $
+        shows t1 . showString ", " . showsPrec (-1) t2
     showsPrec d (VInL t) = showParen (d > appPrec) $
         showString "left " . showsPrec (appPrec + 1) t
     showsPrec d (VInR t) = showParen (d > appPrec) $
@@ -233,7 +233,10 @@ term = choice [abs_, fix_, case_, letIn, makeExprParser base ops] <?> "term"
     letIn = Let <$ "let" <*> delayed
     base =  Var <$> variable
         <|> Int <$> number
-        <|> parens (try (Pair <$> term <* comma) <*> term <|> term <|> pure Unit)
+        <|> parens (tuple <$> term `sepBy` comma)
+    tuple [] = Unit
+    tuple [t] = t
+    tuple (t : ts) = Pair t (tuple ts)
     unaries = [("fst", Fst), ("snd", Snd), ("abort", Abort), ("left", InL), ("right", InR),
                ("fold", Fold), ("unfold", Unfold), ("next", Next), ("prev", Prev),
                ("box", Box), ("unbox", Unbox)]

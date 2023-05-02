@@ -103,10 +103,10 @@ instance Show Type where
     showsPrec _ TInt         = showString "Int"
     showsPrec _ One          = showString "1"
     showsPrec d (t1 :*: t2)  = showParen (d > prodPrec) $
-        showsPrec (prodPrec + 1) t1 . showString " * " . showsPrec (prodPrec + 1) t2
+        showsPrec (prodPrec + 1) t1 . showString " * " . showsPrec prodPrec t2
     showsPrec _ Zero         = showString "0"
     showsPrec d (t1 :+: t2)  = showParen (d > sumPrec) $
-        showsPrec (sumPrec + 1) t1 . showString " + " . showsPrec (sumPrec + 1) t2
+        showsPrec (sumPrec + 1) t1 . showString " + " . showsPrec sumPrec t2
     showsPrec d (t1 :->: t2) = showParen (d > funPrec) $
         showsPrec (funPrec + 1) t1 . showString " -> " . showsPrec funPrec t2
     showsPrec d (Later ty)    = showParen (d > modPrec) $

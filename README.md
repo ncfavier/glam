@@ -57,6 +57,8 @@ TypeDef = "type" TVar TVar* "=" Type ; type synonyms
 Polytype = ("forall" ("#"? TVar)+ ".")? Type
 ```
 
+`*`, `+` and `->` are right-associative.
+
 Some syntactic sugar is provided:
 
 | Construct | Desugars to |
@@ -83,7 +85,7 @@ Unary = "fst" | "snd"
 Term = "(" Term ")"
      | Var                                  ; variables
      | Integer                              ; integers
-     | "(" Term "," Term ")"                ; pairs
+     | "(" ","-separated(Term+) ")"         ; tuples
      | "(" ")"                              ; unit
      | Term Term                            ; applications
      | Term Binary Term                     ; binary operators
@@ -105,6 +107,7 @@ Some syntactic sugar is provided:
 | --- | --- |
 | `f x y z = t` | `f = \x y z. t` |
 | `f = ... f ...` | `f = fix f. ... f ...` |
+| `(a, b, c, ...)` | `(a, (b, (c, ...)))` |
 | `\x y z. t` | `\x. \y. \z. t` |
 | `fix x y z. t` | `fix x. \y z. t` |
 | `f <$> x` | `next f <*> x` |
