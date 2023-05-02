@@ -44,21 +44,21 @@ evalTerm t = do
     s <- Map.mapMaybe fst <$> use termBindings
     return (eval s t)
 
-data FixedStatus = Unguarded | Guarded | Forbidden
-data TVarBinding = Fixed FixedStatus (Maybe [TVar]) | Syn [TVar] Type | Ok
+data Guardedness = Unguarded | Guarded | Forbidden
+data TVarBinding = Syn [TVar] Type | Self Guardedness (Maybe [TVar]) | Argument
 
 evalType :: (MonadGlam m, MonadError String m) => Maybe (TVar, [TVar]) -> Polytype -> m Polytype
 evalType self (Forall as ty) = do
     tbs <- use typeBindings
     let env = Map.fromList $ [(x, Syn ys ty) | (x, (ys, ty)) <- Map.assocs tbs] ++
-                             [(x, Fixed Unguarded (Just ys)) | Just (x, ys) <- [self]] ++
-                             [(x, Ok) | x <- maybe [] snd self ++ map fst as]
+                             [(x, Self Unguarded (Just ys)) | Just (x, ys) <- [self]] ++
+                             [(x, Argument) | x <- maybe [] snd self ++ map fst as]
     ty' <- runReaderT (go ty) env
     return $ Forall as (autoTFix ty')
     where
-    later (Fixed Unguarded as) = Fixed Guarded as
+    later (Self Unguarded as) = Self Guarded as
     later v = v
-    constant (Fixed _ as) = Fixed Forbidden as
+    constant (Self _ as) = Self Forbidden as
     constant v = v
     go ty@TVar{}     = apply ty []
     go ty@TApp{}     = apply ty []
@@ -67,7 +67,7 @@ evalType self (Forall as ty) = do
     go (ta :->: tb)  = (:->:) <$> go ta <*> go tb
     go (Later ty)    = Later <$> local (fmap later) (go ty)
     go (Constant ty) = Constant <$> local (fmap constant) (go ty)
-    go (TFix x tf)   = TFix x <$> local (at x ?~ Fixed Unguarded Nothing) (go tf)
+    go (TFix x tf)   = TFix x <$> local (at x ?~ Self Unguarded Nothing) (go tf)
     go ty            = return ty
     apply (TApp t1 t2) tys = do
         t2' <- go t2
@@ -78,13 +78,13 @@ evalType self (Forall as ty) = do
             | otherwise -> throwError $
                 "wrong number of arguments for type constructor " ++ x ++ ": got " ++
                 show (length tys) ++ ", expecting " ++ show (length ys)
-        Fixed _ (Just ys) | tys /= map TVar ys -> throwError $
+        Self _ (Just ys) | tys /= map TVar ys -> throwError $
             "recursive type constructor " ++ x ++ " must be applied to the same arguments"
-        Fixed Unguarded _ -> throwError $ "unguarded fixed point variable " ++ x
-        Fixed Forbidden _ -> throwError $ "fixed point variable " ++ x ++ " cannot appear under #"
-        Fixed Guarded _ -> return (TVar x)
-        _ | not (null tys) -> throwError $ "not a type constructor: " ++ x
-        _ -> return (TVar x)
+        Self Unguarded _ -> throwError $ "unguarded fixed point variable " ++ x
+        Self Forbidden _ -> throwError $ "fixed point variable " ++ x ++ " cannot appear under #"
+        Self Guarded _ -> return (TVar x)
+        _ | null tys -> return (TVar x)
+          | otherwise -> throwError $ "not a type constructor: " ++ x
     apply ty _ = throwError $ "not a type constructor: " ++ show ty
     autoTFix ty | Just (x, _) <- self, x `freeInType` ty = TFix x ty
                 | otherwise                              = ty
@@ -133,5 +133,5 @@ runStatement (Eval t) = do
 initialEnvironment :: MonadGlam m => m Environment
 initialEnvironment = Map.mapMaybe (\(t, ty) -> (ty, True) <$ t) <$> use termBindings
 
-checkType ty t = runInferT ((t !:) =<< instantiate ty) (allTVars ty) =<< initialEnvironment
-inferType    t = runInferT ((t ?:) >>= generalise)     Set.empty     =<< initialEnvironment
+checkType ty t = runInferT (t !: ty)               (allTVars ty) =<< initialEnvironment
+inferType    t = runInferT ((t ?:) >>= generalise) Set.empty     =<< initialEnvironment

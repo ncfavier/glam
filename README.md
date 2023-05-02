@@ -182,12 +182,6 @@ The `box t` and `prev t` constructs require `t` to be boxable. This makes the ex
 
 ## Bugs and future work
 
-- Polymorphic type variables bound by a type signature should be rigid, i.e.
-  ```
-  x : forall a. a
-  x = 0
-  ```
-  shouldn't type-check.
 - Better type error reporting.
 - Make semicolons and braces optional using something like Haskell's layout rules.
 - Add infix operators.

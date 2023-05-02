@@ -40,11 +40,11 @@ data Polytype = Forall [(TVar, Bool)] Type
 
 pattern Monotype ty = Forall [] ty
 
-class Types t where
+class HasTVars t where
     freeTVars :: t -> Set TVar
     allTVars :: t -> Set TVar
 
-instance Types Type where
+instance HasTVars Type where
     freeTVars (TVar x)     = Set.singleton x
     freeTVars (t1 :*: t2)  = freeTVars t1 <> freeTVars t2
     freeTVars (t1 :+: t2)  = freeTVars t1 <> freeTVars t2
@@ -62,7 +62,7 @@ instance Types Type where
     allTVars (TFix x t)   = Set.insert x (allTVars t)
     allTVars _            = Set.empty
 
-instance Types Polytype where
+instance HasTVars Polytype where
     freeTVars (Forall (map fst -> xs) ty) = freeTVars ty Set.\\ Set.fromList xs
     allTVars (Forall (map fst -> xs) ty) = allTVars ty <> Set.fromList xs
 
