@@ -28,7 +28,7 @@ data Term =
     -- Functions
     | Abs Var Term | Term :$: Term
     -- Let-bindings
-    | Let Delayed
+    | Let Subst Term
     -- Recursion operations
     | Fold Term | Unfold Term | Fix Term
     -- 'Later' operations
@@ -36,8 +36,6 @@ data Term =
     -- 'Constant' operations
     | Box Term | Unbox Term
     deriving Eq
-
-data Delayed = Subst Subst Term deriving Eq
 
 -- Variables
 
@@ -59,7 +57,7 @@ freeVars (InR t)        = freeVars t
 freeVars (Case t t1 t2) = freeVars t <> freeVars t1 <> freeVars t2
 freeVars (Abs x t)      = Set.delete x (freeVars t)
 freeVars (t1 :$: t2)    = freeVars t1 <> freeVars t2
-freeVars (Let d)        = freeVarsDelayed d
+freeVars (Let s t)      = foldMap freeVars s <> (freeVars t Set.\\ Map.keysSet s)
 freeVars (Fold t)       = freeVars t
 freeVars (Unfold t)     = freeVars t
 freeVars (Fix t)        = freeVars t
@@ -68,12 +66,6 @@ freeVars (Prev t)       = freeVars t
 freeVars (t1 :<*>: t2)  = freeVars t1 <> freeVars t2
 freeVars (Box t)        = freeVars t
 freeVars (Unbox t)      = freeVars t
-
-freeVarsSubst :: Subst -> Set Var
-freeVarsSubst = foldMap freeVars
-
-freeVarsDelayed :: Delayed -> Set Var
-freeVarsDelayed (Subst s t) = freeVarsSubst s <> (freeVars t Set.\\ Map.keysSet s)
 
 freeIn :: Var -> Term -> Bool
 x `freeIn` t = x `Set.member` freeVars t
@@ -122,7 +114,7 @@ eval s (Case t (Abs x1 t1) (Abs x2 t2)) = case eval s t of
 eval s (Abs x t)    = VAbs (\ v -> eval (Map.insert x v s) t)
 eval s (t1 :$: t2)    = case eval s t1 of
     VAbs f -> f (eval s t2)
-eval s (Let (Subst s' t)) = eval (Map.union (eval s <$> s') s) t
+eval s (Let s' t) = eval (Map.union (eval s <$> s') s) t
 eval s (Fold t)       = VFold (eval s t)
 eval s (Unfold t)     = case eval s t of
     VFold t -> t
@@ -139,9 +131,6 @@ eval s (Unbox t)      = case eval s t of
 -- Printing
 
 showSubst s = intercalate "; " [v ++ " = " ++ show t | (v, t) <- Map.assocs s]
-
-showDelayed kw d (Subst s t) = showParen (d > 0) $
-    showString kw . showString " {" . showString (pad (showSubst s)) . showString "} in " . shows t
 
 pad "" = ""
 pad s = " " ++ s ++ " "
@@ -184,7 +173,8 @@ instance Show Term where
         showChar '\\' . showString x . showString ". " . shows t
     showsPrec d (t1 :$: t2) = showParen (d > appPrec) $
         showsPrec appPrec t1 . showChar ' ' . showsPrec (appPrec + 1) t2
-    showsPrec d (Let d') = showDelayed "let" d d'
+    showsPrec d (Let s t) = showParen (d > 0) $
+        showString "let {" . showString (pad (showSubst s)) . showString "} in " . shows t
     showsPrec d (Fold t) = showParen (d > appPrec) $
         showString "fold " . showsPrec (appPrec + 1) t
     showsPrec d (Unfold t) = showParen (d > appPrec) $
@@ -239,8 +229,7 @@ term = choice [abs_, fix_, case_, letIn, makeExprParser base ops] <?> "term"
             semicolon
             "right"; x2 <- variable; dot; t2 <- term
             return $ Case t (Abs x1 t1) (Abs x2 t2)
-    delayed = Subst <$> braces subst <* "in" <*> term
-    letIn = Let <$ "let" <*> delayed
+    letIn = Let <$ "let" <*> braces subst <* "in" <*> term
     base =  Var <$> variable
         <|> Int <$> number
         <|> IntRec <$ "intrec"

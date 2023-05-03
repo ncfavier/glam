@@ -207,7 +207,7 @@ instance Check Type where
         ta <- freshTVar
         s !: ta :->: ty
         t !: ta
-    Let (Subst s t) !: ty = do
+    Let s t !: ty = do
         e <- for s \t' -> do
             ty <- generalise =<< (t' ?:)
             constant <- constantTerm False t'
