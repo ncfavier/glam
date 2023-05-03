@@ -1,6 +1,7 @@
 module Glam.Type where
 
 import           Data.List
+import           Data.String
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Map (Map)
@@ -15,6 +16,7 @@ type TSubst = Map TVar Type
 
 infixr 7 :*:
 infixr 6 :+:
+infixr 5 :->:
 
 data Type =
     -- Type variables
@@ -39,6 +41,9 @@ data Polytype = Forall [(TVar, Bool)] Type
               deriving Eq
 
 pattern Monotype ty = Forall [] ty
+
+instance IsString Type where
+    fromString = TVar
 
 class HasTVars t where
     freeTVars :: t -> Set TVar

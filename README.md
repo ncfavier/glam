@@ -85,6 +85,7 @@ Unary = "fst" | "snd"
 Term = "(" Term ")"
      | Var                                  ; variables
      | Integer                              ; integers
+     | "intrec"                             ; integer recursion operator (forall a. (a -> a) -> a -> (a -> a) -> Int -> a)
      | "(" ","-separated(Term+) ")"         ; tuples
      | "(" ")"                              ; unit
      | Term Term                            ; applications

@@ -18,6 +18,7 @@ type Stream a = #StreamG a
 cons x s = box (consG x (next unbox s))
 head s = headG unbox s
 tail s = box prev (tailG unbox s)
+nth n s = head (intrec (\_. s) s tail n)
 
 -- The Fibonacci sequence
 fibG = consG 0 ((\f. consG 1 (zipWithG (\x y. x + y) f <$> tailG f)) <$> fibG)
@@ -29,3 +30,6 @@ head (tail fib)
 head (tail (tail fib))
 head (tail (tail (tail fib)))
 head (tail (tail (tail (tail fib))))
+
+-- Print the 100th Fibonacci number
+nth 100 fib

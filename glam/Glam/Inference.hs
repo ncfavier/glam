@@ -125,7 +125,7 @@ x !:= ty = ifSolved x (!~ ty) (assign =<< zonk ty) where
             when constant $ () <$ constantType True ty -- a constant type variable can only be unified with a constant type
             unifier.at x ?= ty
 
-infix 5 !~
+infix 4 !~
 (!~) :: MonadInfer m => Type -> Type -> m ()
 ta1 :*: tb1  !~ ta2 :*: tb2      = ta1 !~ ta2 >> tb1 !~ tb2
 ta1 :+: tb1  !~ ta2 :+: tb2      = ta1 !~ ta2 >> tb1 !~ tb2
@@ -141,8 +141,11 @@ ty1          !~ ty2 | ty1 == ty2 = return ()
 
 -- Type checking
 
+intrecType :: Polytype
+intrecType = Forall [("a", False)] (("a" :->: "a") :->: "a" :->: ("a" :->: "a") :->: TInt :->: "a")
+
 class Check t where
-    infix 5 !:
+    infix 4 !:
     (!:) :: MonadInfer m => Term -> t -> m ()
 
 instance Check Type where
@@ -168,6 +171,7 @@ instance Check Type where
         a !: TInt
         b !: TInt
         ty !~ TInt
+    IntRec !: ty = (ty !~) =<< instantiate intrecType
     Unit !: ty = ty !~ One
     Pair a b !: ty = do
         ~[ta, tb] <- freshTVars 2

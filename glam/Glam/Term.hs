@@ -20,7 +20,7 @@ data Term =
     -- Variables
       Var Var
     -- Integers
-    | Int Integer | Plus Term Term | Minus Term Term | Times Term Term | Divide Term Term
+    | Int Integer | Plus Term Term | Minus Term Term | Times Term Term | Divide Term Term | IntRec
     -- Products
     | Unit | Pair Term Term | Fst Term | Snd Term
     -- Sums
@@ -48,6 +48,7 @@ freeVars (Plus t1 t2)   = freeVars t1 <> freeVars t2
 freeVars (Minus t1 t2)  = freeVars t1 <> freeVars t2
 freeVars (Times t1 t2)  = freeVars t1 <> freeVars t2
 freeVars (Divide t1 t2) = freeVars t1 <> freeVars t2
+freeVars IntRec         = Set.empty
 freeVars Unit           = Set.empty
 freeVars (Pair t1 t2)   = freeVars t1 <> freeVars t2
 freeVars (Fst t)        = freeVars t
@@ -87,6 +88,13 @@ data Value = VInt Integer
            | VNext Value
            | VBox Value
 
+intrec :: (a -> a) -> a -> (a -> a) -> Integer -> a
+intrec p z s = go where
+    go n = case compare n 0 of
+        LT -> p (go (succ n))
+        EQ -> z
+        GT -> s (go (pred n))
+
 eval :: Map Var Value -> Term -> Value
 eval s (Var x)        = s Map.! x
 eval _ (Int i)        = VInt i
@@ -98,6 +106,7 @@ eval s (Times t1 t2)   = case (eval s t1, eval s t2) of
     (VInt i1, VInt i2) -> VInt (i1 * i2)
 eval s (Divide t1 t2)   = case (eval s t1, eval s t2) of
     (VInt i1, VInt i2) -> VInt (i1 `div` i2)
+eval _ IntRec         = VAbs \(VAbs p) -> VAbs \z -> VAbs \(VAbs s) -> VAbs \(VInt n) -> intrec p z s n
 eval _ Unit           = VUnit
 eval s (Pair t1 t2)   = VPair (eval s t1) (eval s t2)
 eval s (Fst t)        = case eval s t of
@@ -151,6 +160,7 @@ instance Show Term where
         showsPrec plusPrec t1 . showString " * " . showsPrec (plusPrec + 1) t2
     showsPrec d (t1 `Divide` t2) = showParen (d > plusPrec) $
         showsPrec plusPrec t1 . showString " / " . showsPrec (plusPrec + 1) t2
+    showsPrec _ IntRec = showString "intrec"
     showsPrec _ Unit = showString "()"
     showsPrec d (Pair t1 t2) = showParen (d >= 0) $
         shows t1 . showString ", " . showsPrec (-1) t2
@@ -214,7 +224,7 @@ instance Show Value where
 
 variable :: Parser Var
 variable = mkIdentifier
-    ["fst", "snd", "left", "right", "case", "of", "let", "fold", "unfold",
+    ["intrec", "fst", "snd", "left", "right", "case", "of", "let", "fold", "unfold",
      "fix", "next", "prev", "box", "unbox", "in", "type"]
 
 term :: Parser Term
@@ -233,6 +243,7 @@ term = choice [abs_, fix_, case_, letIn, makeExprParser base ops] <?> "term"
     letIn = Let <$ "let" <*> delayed
     base =  Var <$> variable
         <|> Int <$> number
+        <|> IntRec <$ "intrec"
         <|> parens (tuple <$> term `sepBy` comma)
     tuple [] = Unit
     tuple [t] = t
