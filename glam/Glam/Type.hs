@@ -78,10 +78,10 @@ freshTVarsFor xs = [x | n <- [1..]
                       , x <- replicateM n ['a'..'z']
                       , x `Set.notMember` xs]
 
-avoidCaptureType vs ty@(TFix x tf)
-    | x `Set.member` vs = TFix y (substituteType1 x (TVar y) tf)
-    | otherwise = ty
-    where y:_ = freshTVarsFor (vs <> freeTVars ty)
+avoidCaptureType vs (x, ty)
+    | x `Set.member` vs = (y, substituteType1 x (TVar y) ty)
+    | otherwise = (x, ty)
+    where y:_ = freshTVarsFor (vs <> Set.delete x (freeTVars ty))
 
 substituteType :: TSubst -> Type -> Type
 substituteType s (TVar x) = Map.findWithDefault (TVar x) x s
@@ -90,8 +90,8 @@ substituteType s (t1 :+: t2) = substituteType s t1 :+: substituteType s t2
 substituteType s (t1 :->: t2) = substituteType s t1 :->: substituteType s t2
 substituteType s (Later t1) = Later (substituteType s t1)
 substituteType s (Constant t1) = Constant (substituteType s t1)
-substituteType s ty@TFix{} = TFix x (substituteType s tf)
-    where TFix x tf = avoidCaptureType (foldMap freeTVars s) ty
+substituteType s (TFix x tf) = TFix x' (substituteType s tf')
+    where (x', tf') = avoidCaptureType (foldMap freeTVars s) (x, tf)
 substituteType _ ty = ty
 
 substituteType1 x s = substituteType (Map.singleton x s)
@@ -102,10 +102,13 @@ prodPrec = 6
 sumPrec = 4
 funPrec = 0
 modPrec = 8
+appPrec = 10
 
 instance Show Type where
     showsPrec _ (TVar x)     = showString x
     showsPrec _ TInt         = showString "Int"
+    showsPrec d (TApp t1 t2) = showParen (d > appPrec) $
+        showsPrec appPrec t1 . showChar ' ' . showsPrec (appPrec + 1) t2
     showsPrec _ One          = showString "1"
     showsPrec d (t1 :*: t2)  = showParen (d > prodPrec) $
         showsPrec (prodPrec + 1) t1 . showString " * " . showsPrec prodPrec t2

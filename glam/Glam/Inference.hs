@@ -101,7 +101,7 @@ constantType force ty@Later{}
     | force                    = throwError $ "non-constant type " ++ show ty
     | otherwise                = return False
 constantType force (TFix _ t)  = constantType force t
-constantType _ _               = return True
+constantType _     _           = return True
 
 -- Test whether a term only depends on constant terms and types.
 constantTerm :: MonadInfer m => Bool -> Term -> m Bool
@@ -193,7 +193,7 @@ instance Check Type where
         ~[ta, tb] <- freshTVars 2
         ty !~ ta :+: tb
         t !: tb
-    Case t (Abs x1 t1) (Abs x2 t2) !: ty = do
+    Case t ~(Abs x1 t1) ~(Abs x2 t2) !: ty = do
         ~[ta, tb] <- freshTVars 2
         t !: ta :+: tb
         constant <- constantTerm False t
@@ -223,7 +223,7 @@ instance Check Type where
         case ty' of
             TFix x tf -> ty !~ substituteType1 x ty' tf
             _ -> throwError $ "bad type for unfold: " ++ show ty'
-    Fix (Abs x t) !: ty = at x ?~ (Monotype (Later ty), False) |- t !: ty
+    Fix ~(Abs x t) !: ty = at x ?~ (Monotype (Later ty), False) |- t !: ty
     Next t !: ty = do
         ta <- freshTVar
         ty !~ Later ta

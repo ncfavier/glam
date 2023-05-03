@@ -72,7 +72,7 @@ x `freeIn` t = x `Set.member` freeVars t
 
 -- Evaluation
 
-data Value = VInt Integer
+data Value = VInt !Integer
            | VUnit | VPair Value Value
            | VInL Value | VInR Value
            | VAbs (Value -> Value)
@@ -88,45 +88,35 @@ intrec p z s = go where
         GT -> s (go (pred n))
 
 eval :: Map Var Value -> Term -> Value
-eval s (Var x)        = s Map.! x
-eval _ (Int i)        = VInt i
-eval s (Plus t1 t2)   = case (eval s t1, eval s t2) of
-    (VInt i1, VInt i2) -> VInt (i1 + i2)
-eval s (Minus t1 t2)   = case (eval s t1, eval s t2) of
-    (VInt i1, VInt i2) -> VInt (i1 - i2)
-eval s (Times t1 t2)   = case (eval s t1, eval s t2) of
-    (VInt i1, VInt i2) -> VInt (i1 * i2)
-eval s (Divide t1 t2)   = case (eval s t1, eval s t2) of
-    (VInt i1, VInt i2) -> VInt (i1 `div` i2)
-eval _ IntRec         = VAbs \(VAbs p) -> VAbs \z -> VAbs \(VAbs s) -> VAbs \(VInt n) -> intrec p z s n
-eval _ Unit           = VUnit
-eval s (Pair t1 t2)   = VPair (eval s t1) (eval s t2)
-eval s (Fst t)        = case eval s t of
-    VPair t1 _ -> t1
-eval s (Snd t)        = case eval s t of
-    VPair _ t2 -> t2
-eval _ (Abort _)      = undefined
-eval s (InL t)        = VInL (eval s t)
-eval s (InR t)        = VInR (eval s t)
-eval s (Case t (Abs x1 t1) (Abs x2 t2)) = case eval s t of
+eval s (Var x)          = s Map.! x
+eval _ (Int i)          = VInt i
+eval s (Plus t1 t2)     = case (eval s t1, eval s t2) of ~(VInt i1, VInt i2) -> VInt (i1 + i2)
+eval s (Minus t1 t2)    = case (eval s t1, eval s t2) of ~(VInt i1, VInt i2) -> VInt (i1 - i2)
+eval s (Times t1 t2)    = case (eval s t1, eval s t2) of ~(VInt i1, VInt i2) -> VInt (i1 * i2)
+eval s (Divide t1 t2)   = case (eval s t1, eval s t2) of ~(VInt i1, VInt i2) -> VInt (i1 `div` i2)
+eval _ IntRec           = VAbs \(VAbs p) -> VAbs \z -> VAbs \(VAbs s) -> VAbs \(VInt n) -> intrec p z s n
+eval _ Unit             = VUnit
+eval s (Pair t1 t2)     = VPair (eval s t1) (eval s t2)
+eval s (Fst t)          = case eval s t of ~(VPair t1 _) -> t1
+eval s (Snd t)          = case eval s t of ~(VPair _ t2) -> t2
+eval _ (Abort _)        = undefined
+eval s (InL t)          = VInL (eval s t)
+eval s (InR t)          = VInR (eval s t)
+eval s (Case t ~(Abs x1 t1) ~(Abs x2 t2)) = case eval s t of
     VInL l -> eval (Map.insert x1 l s) t1
     VInR r -> eval (Map.insert x2 r s) t2
-eval s (Abs x t)    = VAbs (\ v -> eval (Map.insert x v s) t)
-eval s (t1 :$: t2)    = case eval s t1 of
-    VAbs f -> f (eval s t2)
-eval s (Let s' t) = eval (Map.union (eval s <$> s') s) t
-eval s (Fold t)       = VFold (eval s t)
-eval s (Unfold t)     = case eval s t of
-    VFold t -> t
-eval s (Fix (Abs x t)) = fix \ self -> eval (Map.insert x (VNext self) s) t
-eval s (Next t)       = VNext (eval s t)
-eval s (Prev t)       = case eval s t of
-    VNext t -> t
-eval s (t1 :<*>: t2)  = case (eval s t1, eval s t2) of
-    (VNext (VAbs f), VNext t2) -> VNext (f t2)
-eval s (Box t)        = VBox (eval s t)
-eval s (Unbox t)      = case eval s t of
-    VBox t -> t
+    _ -> undefined
+eval s (Abs x t)        = VAbs (\ v -> eval (Map.insert x v s) t)
+eval s (t1 :$: t2)      = case eval s t1 of ~(VAbs f) -> f (eval s t2)
+eval s (Let s' t)       = eval (Map.union (eval s <$> s') s) t
+eval s (Fold t)         = VFold (eval s t)
+eval s (Unfold t)       = case eval s t of ~(VFold t) -> t
+eval s (Fix ~(Abs x t)) = fix \ self -> eval (Map.insert x (VNext self) s) t
+eval s (Next t)         = VNext (eval s t)
+eval s (Prev t)         = case eval s t of ~(VNext t) -> t
+eval s (t1 :<*>: t2)    = case (eval s t1, eval s t2) of ~(VNext (VAbs f), VNext t2) -> VNext (f t2)
+eval s (Box t)          = VBox (eval s t)
+eval s (Unbox t)        = case eval s t of ~(VBox t) -> t
 
 -- Printing
 
@@ -163,7 +153,7 @@ instance Show Term where
         showString "left " . showsPrec (appPrec + 1) t
     showsPrec d (InR t) = showParen (d > appPrec) $
         showString "right " . showsPrec (appPrec + 1) t
-    showsPrec d (Case t (Abs x1 t1) (Abs x2 t2)) = showParen (d > 0) $
+    showsPrec d (Case t ~(Abs x1 t1) ~(Abs x2 t2)) = showParen (d > 0) $
         showString "case " . shows t . showString " of { left "
             . showString x1 . showString ". " . shows t1
             . showString "; right "
@@ -179,7 +169,7 @@ instance Show Term where
         showString "fold " . showsPrec (appPrec + 1) t
     showsPrec d (Unfold t) = showParen (d > appPrec) $
         showString "unfold " . showsPrec (appPrec + 1) t
-    showsPrec d (Fix (Abs x t)) = showParen (d > 0) $
+    showsPrec d (Fix ~(Abs x t)) = showParen (d > 0) $
         showString "fix " . showString x . showString ". " . shows t
     showsPrec d (Next t) = showParen (d > appPrec) $
         showString "next " . showsPrec (appPrec + 1) t
