@@ -50,20 +50,14 @@
                 white-space: pre-wrap;
             }
         </style>
-        <script id=naturals-txt type="text/plain">$naturals</script>
-        <script id=fibonacci-txt type="text/plain">$fibonacci</script>
-        <script id=primes-txt type="text/plain">$primes</script>
-        <script id=y-txt type="text/plain">$y</script>
+        <script src="glam.min.js" defer></script>
     </head>
     <body>
         <h1><a id=glam href="https://github.com/ncfavier/glam">glam</a>. The guarded λ-calculus</h1>
         <p>Based on Ranald Clouston, Aleš Bizjak, Hans Bugge Grathwohl and Lars Birkedal's <a href="https://arxiv.org/pdf/1606.09455.pdf">paper</a>.</p>
         <p>
             Examples:
-            <button id=naturals class=example>Natural numbers</button>
-            <button id=fibonacci class=example>Fibonacci sequence</button>
-            <button id=primes class=example>Prime numbers</button>
-            <button id=y class=example>Y combinator</button>
+            @examples@
         </p>
         <textarea id=input></textarea>
         <p><button id=run>Run</button></p>
@@ -81,22 +75,17 @@
 
             const output = document.querySelector('#output');
 
-            const update = () => {
-                output.innerHTML = run(editor.getValue());
+            const run = () => {
+                // The glam function is set from Haskell
+                output.innerHTML = glam(editor.getValue());
                 output.style.display = '';
             };
 
-            document.querySelector('#run').addEventListener('click', update);
+            document.querySelector('#run').addEventListener('click', run);
 
             document.querySelectorAll('.example').forEach(e =>
-                e.addEventListener('click', () =>
-                    editor.setValue(document.getElementById(e.id + '-txt').innerHTML)
-                )
+                e.addEventListener('click', () => editor.setValue(e.getAttribute("data-example")))
             );
-
-            // Called from Haskell
-            const init = f => run = f;
         </script>
-        <script src="$glamjs"></script>
     </body>
 </html>

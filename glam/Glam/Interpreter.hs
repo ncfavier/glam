@@ -7,6 +7,7 @@ import           Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import           Control.Applicative hiding (many, some)
+import           Control.Monad
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State

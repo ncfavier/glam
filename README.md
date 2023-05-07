@@ -6,8 +6,8 @@ Please refer to that paper for basic motivation and introduction to the language
 
 - [Usage](#usage)
 - [Syntax](#syntax)
-  - [Terms](#terms)
   - [Types](#types)
+  - [Terms](#terms)
   - [Programs](#programs)
 - [Evaluation](#evaluation)
 - [Type system](#type-system)
@@ -26,11 +26,44 @@ usage: glam [options...] files...
 
 The interactive mode gives you a REPL that will execute statements and display their results. It also provides a `:type` command that displays the type of a given term.
 
-Alternatively, an [online demo](https://glam.monade.li/) is available.
+Alternatively, an [online demo](https://glam.monade.li) is available.
 
 ## Syntax
 
 **glam**'s syntax is intended to be similar to Haskell's. See the `examples` directory for example programs.
+
+### Types
+
+The syntax for types is as follows:
+
+```
+TVar = [a-zA-Z_] [a-zA-Z_0-9']* ; (excluding keywords)
+
+Type = "(" Type ")"
+     | TVar                 ; type variables
+     | TVar Type*           ; application of type synonyms
+     | "Int"                ; integer type
+     | "0"                  ; zero/void/initial type
+     | "1"                  ; unit/terminal type
+     | Type "*" Type        ; product types
+     | Type "+" Type        ; coproduct/sum types
+     | Type "->" Type       ; function types
+     | ">" Type             ; Later types
+     | "#" Type             ; Constant types
+     | "Fix" TVar "." Type  ; fixed point types
+
+TypeDef = "type" TVar TVar* "=" Type ; type synonyms
+
+Polytype = ("forall" ("#"? TVar)+ ".")? Type
+```
+
+Some syntactic sugar is provided:
+
+| Construct | Desugars to |
+| --- | --- |
+| `type T x y z = ... (T x y z) ...` | `type T x y z = Fix T. ... T ...` |
+
+Due to the absence of type-level lambdas, type synonyms must be applied to exactly as many arguments as they expect. When using a type synonym recursively inside its own definition, it must be applied to its exact formal arguments.
 
 ### Terms
 
@@ -75,40 +108,6 @@ Some syntactic sugar is provided:
 | `\x y z. t` | `\x. \y. \z. t` |
 | `fix x y z. t` | `fix x. fix y. fix z. t` |
 | `f <$> x` | `next f <*> x` |
-
-### Types
-
-The syntax for types is as follows:
-
-```
-TVar = [a-zA-Z_] [a-zA-Z_0-9']* ; (excluding keywords)
-
-Type = "(" Type ")"
-     | TVar                 ; type variables
-     | TVar Type*           ; application of type synonyms
-     | "Int"                ; integer type
-     | "0"                  ; zero/void/initial type
-     | "1"                  ; unit/terminal type
-     | Type "*" Type        ; product types
-     | Type "+" Type        ; coproduct/sum types
-     | Type "->" Type       ; function types
-     | ">" Type             ; Later types
-     | "#" Type             ; Constant types
-     | "Fix" TVar+ "." Type ; fixed point types
-
-TypeDef = "type" TVar TVar* "=" Type ; type synonyms
-
-Polytype = ("forall" ("#"? TVar)+ ".")? Type
-```
-
-Some syntactic sugar is provided:
-
-| Construct | Desugars to |
-| --- | --- |
-| `type T x y z = ... (T x y z) ...` | `type T x y z = Fix T. ... T ...` |
-| `Fix x y z. t` | `Fix x. Fix y. Fix z. t` |
-
-Due to the absence of type-level lambdas, type synonyms must be applied to exactly as many arguments as they expect. When using a type synonym recursively inside its own definition, it must be applied to its exact formal arguments.
 
 ### Programs
 

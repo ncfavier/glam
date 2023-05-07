@@ -3,6 +3,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 import Data.Char
 import Data.List
+import Control.Monad
 import Control.Monad.Loops
 import Control.Monad.State
 import System.Console.GetOpt
