@@ -2,17 +2,17 @@
 {-# LANGUAGE TypeFamilies #-}
 module Glam.Interpreter where
 
-import           Data.Functor.Identity
-import           Data.Map (Map)
-import qualified Data.Map as Map
-import qualified Data.Set as Set
-import           Control.Applicative hiding (many, some)
-import           Control.Monad
-import           Control.Monad.Except
-import           Control.Monad.Reader
-import           Control.Monad.State
-import           Control.Monad.Writer
-import           Control.Lens
+import Data.Functor.Identity
+import Data.Map (Map)
+import Data.Map qualified as Map
+import Data.Set qualified as Set
+import Control.Applicative hiding (many, some)
+import Control.Monad
+import Control.Monad.Except
+import Control.Monad.Reader
+import Control.Monad.State
+import Control.Monad.Writer
+import Control.Lens
 
 import Glam.Term
 import Glam.Type

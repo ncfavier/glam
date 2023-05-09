@@ -1,11 +1,11 @@
 module Glam.Term where
 
-import           Data.Function
-import           Data.List
-import           Data.Map.Lazy (Map)
-import qualified Data.Map.Lazy as Map
-import           Data.Set (Set)
-import qualified Data.Set as Set
+import Data.Function
+import Data.List
+import Data.Map.Lazy (Map)
+import Data.Map.Lazy qualified as Map
+import Data.Set (Set)
+import Data.Set qualified as Set
 
 import Glam.Parser
 

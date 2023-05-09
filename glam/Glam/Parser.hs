@@ -6,15 +6,15 @@ module Glam.Parser (
     module Control.Monad.Combinators.Expr
 ) where
 
-import           Control.Monad.Combinators.Expr
-import           Control.Monad.Reader
-import           Data.Bifunctor (first)
-import           Data.Char
-import           Data.String
-import           Data.Void
-import           Text.Megaparsec hiding (State, parse)
-import           Text.Megaparsec.Char
-import qualified Text.Megaparsec.Char.Lexer as L
+import Control.Monad.Combinators.Expr
+import Control.Monad.Reader
+import Data.Bifunctor (first)
+import Data.Char
+import Data.String
+import Data.Void
+import Text.Megaparsec hiding (State, parse)
+import Text.Megaparsec.Char
+import Text.Megaparsec.Char.Lexer qualified as L
 
 type IndentRef = Maybe SourcePos
 

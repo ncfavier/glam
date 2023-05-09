@@ -44,6 +44,7 @@ executable glam
     FlexibleContexts
     ConstraintKinds
     NoMonomorphismRestriction
+    ImportQualifiedPost
   ghc-options:         -W
   ghcjs-options:       -dedupe
 
