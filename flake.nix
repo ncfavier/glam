@@ -37,7 +37,7 @@
       web = pkgs.runCommand "glam-web" {
         examples = lib.concatMapStrings ({ name, description }: ''
           <button class=example id="${name}" data-example="${
-            lib.escapeXML (builtins.readFile examples/${name}.glam)
+            lib.escapeXML (lib.fileContents examples/${name}.glam)
           }">${lib.escapeXML description}</button>
         '') examples;
       } ''

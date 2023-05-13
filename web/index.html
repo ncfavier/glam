@@ -7,8 +7,8 @@
         <title>glam — The guarded λ-calculus</title>
         <link rel=icon href="favicon.ico">
         <link rel=stylesheet href="https://fonts.googleapis.com/css2?family=Source+Serif+Pro:wght@400;700&display=swap">
-        <link rel=stylesheet href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/codemirror.min.css">
-        <link rel=stylesheet href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/theme/idea.min.css">
+        <link rel=stylesheet href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+        <link rel=stylesheet href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/idea.min.css">
         <style>
             body {
                 font-family: 'Source Serif Pro', serif;
@@ -36,19 +36,15 @@
                 -webkit-appearance: none;
             }
 
-            .CodeMirror, #output {
-                border: 1px solid #ddd;
-            }
-
             .CodeMirror {
-                height: 400px;
                 font-family: monospace;
+                border: 1px solid #ddd;
+                height: 400px;
             }
 
-            #output {
+            .CodeMirror.output {
+                height: auto !important;
                 padding: 10px;
-                white-space: pre-wrap;
-                overflow-wrap: break-word;
             }
         </style>
         <script src="glam.min.js" defer></script>
@@ -60,32 +56,39 @@
             Examples:
             @examples@
         </p>
-        <textarea id=input></textarea>
-        <p><button id=run>Run</button></p>
-        <pre id=output style="display: none;"></pre>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/codemirror.min.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/addon/edit/matchbrackets.min.js"></script>
+        <textarea id=input autofocus></textarea>
+        <p><button id=run>↓ Run</button></p>
+        <div id=output></div>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/addon/edit/matchbrackets.min.js"></script>
         <script src="glam_syntax.js"></script>
         <script>
-            const editor = CodeMirror.fromTextArea(document.querySelector('#input'), {
+            const input = CodeMirror.fromTextArea(document.querySelector('#input'), {
                 lineNumbers: true,
                 matchBrackets: true,
                 theme: "idea",
                 mode: "glam"
             });
 
-            const output = document.querySelector('#output');
+            const output = CodeMirror(el => {
+                el.classList.add("output");
+                const output = document.querySelector('#output');
+                output.parentNode.replaceChild(el, output);
+            }, {
+                readOnly: "nocursor",
+                lineWrapping: true,
+                viewportMargin: Infinity,
+                theme: "idea",
+                mode: "glam"
+            });
 
-            const run = () => {
-                // The glam function is set from Haskell
-                output.innerHTML = glam(editor.getValue());
-                output.style.display = '';
-            };
+            // The glam function is set from Haskell
+            const run = () => output.setValue(glam(input.getValue()).trimEnd());
 
             document.querySelector('#run').addEventListener('click', run);
 
             document.querySelectorAll('.example').forEach(e =>
-                e.addEventListener('click', () => editor.setValue(e.getAttribute("data-example")))
+                e.addEventListener('click', () => input.setValue(e.getAttribute("data-example")))
             );
         </script>
     </body>
