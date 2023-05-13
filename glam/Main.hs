@@ -30,12 +30,12 @@ parseArgs = do
         (o, fs, [])  -> pure (not (null o), fs)
         (_, _, errs) -> die $ concat errs ++ usageInfo usage options
     let interactive = i || null fs
-    return (interactive, fs)
+    pure (interactive, fs)
 
 comp = completeWord Nothing " \t" \p -> do
     defined <- getWords
     let words = defined ++ ["fst", "snd", "abort", "left", "right", "fold", "unfold", "box", "unbox", "next", "prev"]
-    return [simpleCompletion w | w <- words, p `isPrefixOf` w]
+    pure [simpleCompletion w | w <- words, p `isPrefixOf` w]
 
 settings = Settings { complete = comp
                     , historyFile = Just ".glam_history"

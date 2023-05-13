@@ -56,14 +56,14 @@ class Zonk t where
 instance Zonk Type where
     zonk (TVar x)     = do
         s <- view (typeCtx.at x)
-        if isJust s then return (TVar x) else ifSolved x zonk (return (TVar x))
+        if isJust s then pure (TVar x) else ifSolved x zonk (pure (TVar x))
     zonk (a :*: b)    = (:*:) <$> zonk a <*> zonk b
     zonk (a :+: b)    = (:+:) <$> zonk a <*> zonk b
     zonk (a :->: b)   = (:->:) <$> zonk a <*> zonk b
     zonk (Later t)    = Later <$> zonk t
     zonk (Constant t) = Constant <$> zonk t
     zonk (TFix x t)   = typeCtx.at x ?~ False |- TFix x <$> zonk t
-    zonk ty           = return ty
+    zonk ty           = pure ty
 instance Zonk Polytype where
     zonk (Forall xs ty) = typeCtx <>~ Map.fromList xs |- Forall xs <$> zonk ty
 
@@ -72,7 +72,7 @@ instantiate :: MonadInfer m => Polytype -> m Type
 instantiate (Forall xs ty) = do
     ys <- freshTVars (length xs)
     constantTVars <>= Set.fromList [y | ((_, True), TVar y) <- zip xs ys]
-    return $ substituteType (Map.fromList (zip (map fst xs) ys)) ty
+    pure $ substituteType (Map.fromList (zip (map fst xs) ys)) ty
 
 -- Generalise a type to a polytype by closing on its variables that aren't free in the context.
 generalise :: MonadInfer m => Type -> m Polytype
@@ -81,7 +81,7 @@ generalise ty = do
     freeInCtx <- fmap (foldMap freeTVars) . traverse (zonk . fst) =<< view termCtx
     constantTVars <- use constantTVars
     let free = Set.toList (freeTVars ty Set.\\ freeInCtx)
-    return $ Forall [(x, x `Set.member` constantTVars) | x <- free] ty
+    pure $ Forall [(x, x `Set.member` constantTVars) | x <- free] ty
 
 -- Test whether a type is constant, optionally forcing it to be by marking its type variables as constant.
 constantType :: MonadInfer m => Bool -> Type -> m Bool
@@ -97,9 +97,9 @@ constantType force (t1 :+: t2) = (&&) <$> constantType force t1 <*> constantType
 constantType force (_ :->: t2) = constantType force t2
 constantType force ty@Later{}
     | force                    = throwError $ "non-constant type " ++ show ty
-    | otherwise                = return False
+    | otherwise                = pure False
 constantType force (TFix _ t)  = constantType force t
-constantType _     _           = return True
+constantType _     _           = pure True
 
 -- Test whether a term only depends on constant terms and types.
 constantTerm :: MonadInfer m => Bool -> Term -> m Bool
@@ -107,7 +107,7 @@ constantTerm force t = do
     ctx <- view termCtx
     and <$> traverse isConstantBinding (Map.restrictKeys ctx (freeVars t))
     where
-    isConstantBinding (_, True) = return True
+    isConstantBinding (_, True) = pure True
     isConstantBinding (ty, False) = constantType force =<< zonk =<< instantiate ty
 
 -- Unification
@@ -131,7 +131,7 @@ ta1 :->: tb1 !~ ta2 :->: tb2     = ta1 !~ ta2 >> tb1 !~ tb2
 Later ty1    !~ Later ty2        = ty1 !~ ty2
 Constant ty1 !~ Constant ty2     = ty1 !~ ty2
 TFix x1 tf1  !~ TFix x2 tf2      = tf1 !~ substituteType1 x2 (TVar x1) tf2
-ty1          !~ ty2 | ty1 == ty2 = return ()
+ty1          !~ ty2 | ty1 == ty2 = pure ()
                     | otherwise  = ifMeta ty1 (!:= ty2) $ ifMeta ty2 (!:= ty1) do
     ty1 <- zonk ty1
     ty2 <- zonk ty2
@@ -210,7 +210,7 @@ instance CheckInfer Type where
         e <- for s \t' -> do
             ty <- (t' ?:)
             constant <- constantTerm False t'
-            return (ty, constant)
+            pure (ty, constant)
         termCtx %~ Map.union e |- t !: ty
     Fold t !: ty = do
         ty <- zonk ty
@@ -245,7 +245,7 @@ instance CheckInfer Type where
     (?:) t = do
         ty <- freshTVar
         t !: ty
-        return ty
+        pure ty
 
 instance CheckInfer Polytype where
     t !: Forall xs ty = typeCtx <>~ Map.fromList xs |- t !: ty

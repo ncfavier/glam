@@ -40,7 +40,7 @@ lexeme p = do
         Just SourcePos { sourceLine = refLine, sourceColumn = refColumn }
             | curLine > refLine, curColumn <= refColumn ->
                 L.incorrectIndent GT refColumn curColumn
-        _ -> return ()
+        _ -> pure ()
     p <* whitespace
 
 symbol, keyword :: String -> Parser String
@@ -76,4 +76,4 @@ mkIdentifier reserved = label "identifier" $ try $ lexeme do
     w <- word
     if w `elem` reserved
         then fail $ "unexpected keyword " ++ w
-        else return w
+        else pure w

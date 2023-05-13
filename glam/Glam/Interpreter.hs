@@ -42,7 +42,7 @@ runGlam = runIdentity . runGlamT
 evalTerm :: MonadGlam m => Term -> m Value
 evalTerm t = do
     s <- Map.mapMaybe fst <$> use termBindings
-    return (eval s t)
+    pure (eval s t)
 
 data TVarBinding = Syn [TVar] Type | Self Guardedness (Maybe [TVar]) | Argument
 
@@ -53,7 +53,7 @@ checkType self (Forall as ty) = do
                              [(x, Self Unguarded (Just ys)) | Just (x, ys) <- [self]] ++
                              [(x, Argument) | x <- maybe [] snd self ++ map fst as]
     (ty', First autofix) <- runWriterT (runReaderT (go ty) ctx)
-    return $ Forall as (maybe id TFix autofix ty')
+    pure $ Forall as (maybe id TFix autofix ty')
     where
     later (Self Unguarded as) = Self Guarded as
     later v = v
@@ -67,13 +67,13 @@ checkType self (Forall as ty) = do
     go (Later ty)    = Later <$> local (fmap later) (go ty)
     go (Constant ty) = Constant <$> local (fmap constant) (go ty)
     go (TFix x tf)   = TFix x <$> local (at x ?~ Self Unguarded Nothing) (go tf)
-    go ty            = return ty
+    go ty            = pure ty
     apply (TApp t1 t2) tys = do
         t2' <- go t2
         apply t1 (t2':tys)
     apply (TVar x) tys = view (at x) >>= maybe (throwError $ "unbound type variable " ++ x) \case
         Syn ys ty
-            | length ys == length tys -> return $ substituteType (Map.fromList (zip ys tys)) ty
+            | length ys == length tys -> pure $ substituteType (Map.fromList (zip ys tys)) ty
             | otherwise -> throwError $
                 "wrong number of arguments for type constructor " ++ x ++ ": got " ++
                 show (length tys) ++ ", expecting " ++ show (length ys)
@@ -82,8 +82,8 @@ checkType self (Forall as ty) = do
         Self Unguarded _ -> throwError $ "unguarded fixed point variable " ++ x
         Self Forbidden _ -> throwError $ "fixed point variable " ++ x ++ " cannot appear under #"
         Self Guarded (Just _) -> TVar x <$ tell (First (Just x))
-        Self Guarded Nothing -> return (TVar x)
-        _ | null tys -> return (TVar x)
+        Self Guarded Nothing -> pure (TVar x)
+        _ | null tys -> pure (TVar x)
           | otherwise -> throwError $ "not a type constructor: " ++ x
     apply ty _ = throwError $ "not a type constructor: " ++ show ty
 

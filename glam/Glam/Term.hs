@@ -218,7 +218,7 @@ term = choice [abs_, fix_, case_, letIn, makeExprParser base ops] <?> "term"
             "left"; x1 <- variable; dot; t1 <- term
             semicolon
             "right"; x2 <- variable; dot; t2 <- term
-            return $ Case t (Abs x1 t1) (Abs x2 t2)
+            pure $ Case t (Abs x1 t1) (Abs x2 t2)
     letIn = Let <$ "let" <*> braces subst <* "in" <*> term
     base =  Var <$> variable
         <|> Int <$> number
