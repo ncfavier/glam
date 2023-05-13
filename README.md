@@ -1,8 +1,8 @@
 # glam
 
-**glam** is an implementation of the guarded λ-calculus, as described in the paper [The Guarded Lambda-Calculus: Programming and Reasoning with Guarded Recursion for Coinductive Types](https://arxiv.org/abs/1606.09455) by Ranald Clouston, Aleš Bizjak, Hans Bugge Grathwohl and Lars Birkedal.
+**glam** is an implementation of the guarded λ-calculus, as described in the paper [The Guarded Lambda-Calculus: Programming and Reasoning with Guarded Recursion for Coinductive Types](https://arxiv.org/abs/1606.09455) by Ranald Clouston, Aleš Bizjak, Hans Bugge Grathwohl and Lars Birkedal, and extended with polymorphism and automatic boxing as described in my [internship report](https://monade.li/glam.pdf).
 
-Please refer to that paper for basic motivation and introduction to the language, as well as a description of its type system, operational and denotational semantics. This README only covers the specifics of my implementation.
+Please refer to those papers for basic motivation and introduction to the language, as well as a description of its type system, operational and denotational semantics. This README only covers the specifics of my implementation.
 
 - [Usage](#usage)
 - [Syntax](#syntax)

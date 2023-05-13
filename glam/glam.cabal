@@ -4,7 +4,7 @@ name:                glam
 version:             0.0
 synopsis:            The guarded λ-calculus
 description:
-  An implementation of Clouston, Bizjak, Bugge and Birkedal's guarded λ-calculus.
+  An implementation of Clouston, Bizjak, Bugge and Birkedal's guarded λ-calculus with rank-1 polymorphism and automatic boxing.
 homepage:            https://github.com/ncfavier/glam
 license:             ISC
 license-file:        LICENSE
