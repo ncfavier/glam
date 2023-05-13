@@ -44,17 +44,16 @@ evalTerm t = do
     s <- Map.mapMaybe fst <$> use termBindings
     return (eval s t)
 
-data Guardedness = Unguarded | Guarded | Forbidden
 data TVarBinding = Syn [TVar] Type | Self Guardedness (Maybe [TVar]) | Argument
 
-evalType :: (MonadGlam m, MonadError String m) => Maybe (TVar, [TVar]) -> Polytype -> m Polytype
-evalType self (Forall as ty) = do
+checkType :: (MonadGlam m, MonadError String m) => Maybe (TVar, [TVar]) -> Polytype -> m Polytype
+checkType self (Forall as ty) = do
     tbs <- use typeBindings
-    let env = Map.fromList $ [(x, Syn ys ty) | (x, (ys, ty)) <- Map.assocs tbs] ++
+    let ctx = Map.fromList $ [(x, Syn ys ty) | (x, (ys, ty)) <- Map.assocs tbs] ++
                              [(x, Self Unguarded (Just ys)) | Just (x, ys) <- [self]] ++
                              [(x, Argument) | x <- maybe [] snd self ++ map fst as]
-    ty' <- runReaderT (go ty) env
-    return $ Forall as (autoTFix ty')
+    (ty', First autofix) <- runWriterT (runReaderT (go ty) ctx)
+    return $ Forall as (maybe id TFix autofix ty')
     where
     later (Self Unguarded as) = Self Guarded as
     later v = v
@@ -82,20 +81,28 @@ evalType self (Forall as ty) = do
             "recursive type constructor " ++ x ++ " must be applied to the same arguments"
         Self Unguarded _ -> throwError $ "unguarded fixed point variable " ++ x
         Self Forbidden _ -> throwError $ "fixed point variable " ++ x ++ " cannot appear under #"
-        Self Guarded _ -> return (TVar x)
+        Self Guarded (Just _) -> TVar x <$ tell (First (Just x))
+        Self Guarded Nothing -> return (TVar x)
         _ | null tys -> return (TVar x)
           | otherwise -> throwError $ "not a type constructor: " ++ x
     apply ty _ = throwError $ "not a type constructor: " ++ show ty
-    autoTFix ty | Just (x, _) <- self, x `freeInType` ty = TFix x ty
-                | otherwise                              = ty
+
+initialEnvironment :: MonadGlam m => m Environment
+initialEnvironment = do
+    ts <- use termBindings
+    pure $ Environment (Map.mapMaybe (\(t, ty) -> (ty, True) <$ t) ts) Map.empty
+
+checkTerm ty t = runInferT (t !: ty) (allTVars ty) =<< initialEnvironment
+inferTerm    t = runInferT (t ?:)    Set.empty     =<< initialEnvironment
 
 getWords :: MonadGlam m => m [Var]
 getWords = liftA2 (<>) (Map.keys <$> use termBindings)
                        (Map.keys <$> use typeBindings)
 
+getType :: MonadGlam m => String -> m (Either String Polytype)
 getType s = runExceptT do
     t <- liftEither $ parse term "" s
-    inferType t
+    inferTerm t
 
 statement :: Parser Statement
 statement = typeDef <|> signature <|> uncurry Def <$> binding <|> Eval <$> term
@@ -113,25 +120,19 @@ runFile name contents = runExceptT $ execWriterT do
 
 runStatement :: (MonadGlam m, MonadWriter [String] m, MonadError String m) => Statement -> m ()
 runStatement (TypeDef x ys ty) = do
-    ~(Monotype ty') <- evalType (Just (x, ys)) (Monotype ty)
+    ~(Monotype ty') <- checkType (Just (x, ys)) (Monotype ty)
     typeBindings.at x ?= (ys, ty')
 runStatement (Signature x ty) = do
-    ty' <- evalType Nothing ty
+    ty' <- checkType Nothing ty
     termBindings.at x ?= (Nothing, ty')
 runStatement (Def x t) = do
     ty <- use (termBindings.at x) >>= \case
-        Just (_, ty) -> ty <$ checkType ty t
-        Nothing -> inferType t
+        Just (_, ty) -> ty <$ checkTerm ty t
+        Nothing -> inferTerm t
     t' <- evalTerm t
     termBindings.at x ?= (Just t', ty)
     tell [x ++ " : " ++ show ty]
 runStatement (Eval t) = do
-    ty <- inferType t
+    ty <- inferTerm t
     t' <- evalTerm t
-    tell [show t' ++ " : " ++ show ty]
-
-initialEnvironment :: MonadGlam m => m Environment
-initialEnvironment = Map.mapMaybe (\(t, ty) -> (ty, True) <$ t) <$> use termBindings
-
-checkType ty t = runInferT (t !: ty)               (allTVars ty) =<< initialEnvironment
-inferType    t = runInferT ((t ?:) >>= generalise) Set.empty     =<< initialEnvironment
+    tell [show t' ++ " : " ++ show (ty :: Polytype)]

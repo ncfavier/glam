@@ -1,10 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE UndecidableInstances #-}
 module Glam.Inference where
 
-import Data.Bool
+import Data.Maybe
 import Data.Traversable
 import Data.Map (Map)
 import Data.Map qualified as Map
@@ -22,30 +19,30 @@ import Glam.Type
 infix 1 |-
 (|-) = local
 
--- TODO use a single environment for term and type variables
-instance {-# OVERLAPPABLE #-} MonadReader r m => MonadReader r (ReaderT r' m) where
-    ask = lift ask
-    local = mapReaderT . local
-
-data InferState = InferState { _unifier :: Map TVar Type  -- The unifying substitution; maps metavariables to the type they are bound to
-                             , _boundTVars :: Set TVar    -- Bound type variables (as opposed to metavariables)
-                             , _constantTVars :: Set TVar -- Type variables which can only represent constant types
+data InferState = InferState { _unifier :: Map TVar Type  -- The unifying substitution: maps metavariables to the type they are bound to
+                                                          -- NOTE: there is no guarantee that this is well-scoped, but currently we don't
+                                                          -- extend type contexts after metas are created.
+                                                          -- This would change if we were to implement polytype signatures in let-bindings,
+                                                          -- or higher-rank polymorphism, or existentials, etc.
+                             , _constantTVars :: Set TVar -- Metavariables which can only represent constant types
                              , _tvars :: [TVar] }         -- A stream of fresh type variables
 
 makeLenses ''InferState
 
-type Environment = Map Var (Polytype, Bool)
+data Environment = Environment { _termCtx :: Map Var (Polytype, Bool)
+                               , _typeCtx :: Map TVar Bool }
+
+makeLenses ''Environment
 
 type MonadInfer m = (MonadState InferState m, MonadReader Environment m, MonadError String m)
 
 runInferT a xs env = runReaderT (evalStateT a initialInferState) env
-    where initialInferState = InferState Map.empty Set.empty Set.empty (freshTVarsFor xs)
+    where initialInferState = InferState Map.empty Set.empty (freshTVarsFor xs)
 
 ifMeta :: MonadInfer m => Type -> (TVar -> m ()) -> m () -> m ()
-ifMeta (TVar x) y n = bool (y x) n =<< use (boundTVars.contains x)
+ifMeta (TVar x) y n = maybe (y x) (const n) =<< view (typeCtx.at x)
 ifMeta _ _ n = n
 
--- TODO what if bound?
 ifSolved :: MonadInfer m => TVar -> (Type -> m a) -> m a -> m a
 ifSolved x y n = maybe n y =<< use (unifier.at x)
 
@@ -57,21 +54,18 @@ freshTVars n = replicateM n freshTVar
 class Zonk t where
     zonk :: MonadInfer m => t -> m t
 instance Zonk Type where
-    zonk ty = runReaderT (zonk' ty) Set.empty
+    zonk (TVar x)     = do
+        s <- view (typeCtx.at x)
+        if isJust s then return (TVar x) else ifSolved x zonk (return (TVar x))
+    zonk (a :*: b)    = (:*:) <$> zonk a <*> zonk b
+    zonk (a :+: b)    = (:+:) <$> zonk a <*> zonk b
+    zonk (a :->: b)   = (:->:) <$> zonk a <*> zonk b
+    zonk (Later t)    = Later <$> zonk t
+    zonk (Constant t) = Constant <$> zonk t
+    zonk (TFix x t)   = typeCtx.at x ?~ False |- TFix x <$> zonk t
+    zonk ty           = return ty
 instance Zonk Polytype where
-    zonk (Forall xs ty) = Forall xs <$> runReaderT (zonk' ty) (Set.fromList (map fst xs))
-
-zonk' :: MonadInfer m => Type -> ReaderT (Set TVar) m Type
-zonk' (TVar x)     = do
-    s <- asks (Set.member x)
-    if s then return (TVar x) else ifSolved x zonk' (return (TVar x))
-zonk' (a :*: b)    = (:*:) <$> zonk' a <*> zonk' b
-zonk' (a :+: b)    = (:+:) <$> zonk' a <*> zonk' b
-zonk' (a :->: b)   = (:->:) <$> zonk' a <*> zonk' b
-zonk' (Later t)    = Later <$> zonk' t
-zonk' (Constant t) = Constant <$> zonk' t
-zonk' (TFix x t)   = TFix x <$> local (Set.insert x) (zonk' t)
-zonk' ty           = return ty
+    zonk (Forall xs ty) = typeCtx <>~ Map.fromList xs |- Forall xs <$> zonk ty
 
 -- Instantiate a polytype to a type by replacing polymorphic type variables with fresh metavariables.
 instantiate :: MonadInfer m => Polytype -> m Type
@@ -80,20 +74,24 @@ instantiate (Forall xs ty) = do
     constantTVars <>= Set.fromList [y | ((_, True), TVar y) <- zip xs ys]
     return $ substituteType (Map.fromList (zip (map fst xs) ys)) ty
 
--- Generalise a type to a polytype by closing on its variables that aren't free in the environment.
+-- Generalise a type to a polytype by closing on its variables that aren't free in the context.
 generalise :: MonadInfer m => Type -> m Polytype
 generalise ty = do
     ty <- zonk ty
-    freeInEnv <- fmap (foldMap freeTVars) . traverse (zonk . fst) =<< ask
+    freeInCtx <- fmap (foldMap freeTVars) . traverse (zonk . fst) =<< view termCtx
     constantTVars <- use constantTVars
-    let free = Set.toList (freeTVars ty Set.\\ freeInEnv)
+    let free = Set.toList (freeTVars ty Set.\\ freeInCtx)
     return $ Forall [(x, x `Set.member` constantTVars) | x <- free] ty
 
 -- Test whether a type is constant, optionally forcing it to be by marking its type variables as constant.
 constantType :: MonadInfer m => Bool -> Type -> m Bool
-constantType force (TVar x)
-    | force                    = constantTVars.contains x <.= True
-    | otherwise                = use (constantTVars.contains x)
+constantType force (TVar x) = do
+    s <- view (typeCtx.at x)
+    case s of
+        Just False | force -> throwError $ "non-constant type variable " ++ x
+        Just constant -> pure constant
+        Nothing | force     -> constantTVars.contains x <.= True
+                | otherwise -> use (constantTVars.contains x)
 constantType force (t1 :*: t2) = (&&) <$> constantType force t1 <*> constantType force t2
 constantType force (t1 :+: t2) = (&&) <$> constantType force t1 <*> constantType force t2
 constantType force (_ :->: t2) = constantType force t2
@@ -106,8 +104,8 @@ constantType _     _           = return True
 -- Test whether a term only depends on constant terms and types.
 constantTerm :: MonadInfer m => Bool -> Term -> m Bool
 constantTerm force t = do
-    env <- ask
-    and <$> traverse isConstantBinding (Map.restrictKeys env (freeVars t))
+    ctx <- view termCtx
+    and <$> traverse isConstantBinding (Map.restrictKeys ctx (freeVars t))
     where
     isConstantBinding (_, True) = return True
     isConstantBinding (ty, False) = constantType force =<< zonk =<< instantiate ty
@@ -144,12 +142,13 @@ ty1          !~ ty2 | ty1 == ty2 = return ()
 intrecType :: Polytype
 intrecType = Forall [("a", False)] (("a" :->: "a") :->: "a" :->: ("a" :->: "a") :->: TInt :->: "a")
 
-class Check t where
+class CheckInfer t where
     infix 4 !:
     (!:) :: MonadInfer m => Term -> t -> m ()
+    (?:) :: MonadInfer m => Term -> m t
 
-instance Check Type where
-    Var x !: ty = view (at x) >>= \case
+instance CheckInfer Type where
+    Var x !: ty = view (termCtx.at x) >>= \case
         Just (tyx, _) -> do
             tyx' <- instantiate tyx
             ty !~ tyx'
@@ -197,22 +196,22 @@ instance Check Type where
         ~[ta, tb] <- freshTVars 2
         t !: ta :+: tb
         constant <- constantTerm False t
-        at x1 ?~ (Monotype ta, constant) |- t1 !: ty
-        at x2 ?~ (Monotype tb, constant) |- t2 !: ty
+        termCtx.at x1 ?~ (Monotype ta, constant) |- t1 !: ty
+        termCtx.at x2 ?~ (Monotype tb, constant) |- t2 !: ty
     Abs x t !: ty = do
         ~[ta, tb] <- freshTVars 2
         ty !~ ta :->: tb
-        at x ?~ (Monotype ta, False) |- t !: tb
+        termCtx.at x ?~ (Monotype ta, False) |- t !: tb
     s :$: t !: ty = do
         ta <- freshTVar
         s !: ta :->: ty
         t !: ta
     Let s t !: ty = do
         e <- for s \t' -> do
-            ty <- generalise =<< (t' ?:)
+            ty <- (t' ?:)
             constant <- constantTerm False t'
             return (ty, constant)
-        Map.union e |- t !: ty
+        termCtx %~ Map.union e |- t !: ty
     Fold t !: ty = do
         ty <- zonk ty
         case ty of
@@ -223,7 +222,7 @@ instance Check Type where
         case ty' of
             TFix x tf -> ty !~ substituteType1 x ty' tf
             _ -> throwError $ "bad type for unfold: " ++ show ty'
-    Fix ~(Abs x t) !: ty = at x ?~ (Monotype (Later ty), False) |- t !: ty
+    Fix ~(Abs x t) !: ty = termCtx.at x ?~ (Monotype (Later ty), False) |- t !: ty
     Next t !: ty = do
         ta <- freshTVar
         ty !~ Later ta
@@ -243,15 +242,12 @@ instance Check Type where
         () <$ constantTerm True t
     Unbox t !: ty = t !: Constant ty
 
-instance Check Polytype where
-    t !: Forall xs ty = do
-        boundTVars <>= Set.fromList (map fst xs)
-        constantTVars <>= Set.fromList [y | (y, True) <- xs]
+    (?:) t = do
+        ty <- freshTVar
         t !: ty
+        return ty
 
--- Type inference
-(?:) :: MonadInfer m => Term -> m Type
-(?:) t = do
-    ty <- freshTVar
-    t !: ty
-    return ty
+instance CheckInfer Polytype where
+    t !: Forall xs ty = typeCtx <>~ Map.fromList xs |- t !: ty
+
+    (?:) = (?:) >=> generalise

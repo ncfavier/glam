@@ -178,7 +178,7 @@ Consider the following motivating examples:
   ```
   Again, this would not be allowed, because `a` and `b` have the potentially non-constant types `a` and `b`.
 
-We solve these two problems simultaneously by introducing (environment-dependent) notions of **boxable terms** and **boxed variables**, defined as follows:
+We solve these two problems simultaneously by introducing (context-dependent) notions of **boxable terms** and **boxed variables**, defined as follows:
 - A term is boxable if each of its free variables is either boxed or has a constant type.
 - A variable that is `let`-bound to a boxable term is automatically boxed (this includes top-level bindings; as a consequence, all top-level bound variables are boxed). Similarly, a variable bound in a `case` expression from matching on a boxable term is boxed.
 

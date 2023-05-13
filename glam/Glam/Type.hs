@@ -42,6 +42,8 @@ data Polytype = Forall [(TVar, Bool)] Type
 
 pattern Monotype ty = Forall [] ty
 
+data Guardedness = Unguarded | Guarded | Forbidden
+
 instance IsString Type where
     fromString = TVar
 
