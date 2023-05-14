@@ -98,6 +98,11 @@ substituteType _ ty = ty
 
 substituteType1 x s = substituteType (Map.singleton x s)
 
+alphaNormalise :: Polytype -> Polytype
+alphaNormalise pty@(Forall as ty) = Forall [(b, c) | ((_, c), b) <- s] ty' where
+    s = zip as (freshTVarsFor (freeTVars pty))
+    ty' = substituteType (Map.fromList [(a, TVar b) | ((a, _), b) <- s]) ty
+
 -- Printing
 
 prodPrec = 6

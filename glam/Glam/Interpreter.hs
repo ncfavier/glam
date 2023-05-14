@@ -93,7 +93,7 @@ initialEnvironment = do
     pure $ Environment (Map.mapMaybe (\(t, ty) -> (ty, True) <$ t) ts) Map.empty
 
 checkTerm ty t = runInferT (t !: ty) (allTVars ty) =<< initialEnvironment
-inferTerm    t = runInferT (t ?:)    Set.empty     =<< initialEnvironment
+inferTerm t = fmap alphaNormalise . runInferT (t ?:) Set.empty =<< initialEnvironment
 
 getWords :: MonadGlam m => m [Var]
 getWords = liftA2 (<>) (Map.keys <$> use termBindings)
