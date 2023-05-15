@@ -235,7 +235,7 @@ term = choice [abs_, fix_, case_, letIn, makeExprParser base ops] <?> "term"
             , Prefix (foldr1 (.) <$> some unary) ]
           , [ InfixL (Plus <$ symbol "+"), InfixL (Minus <$ symbol "-")
             , InfixL (Times <$ symbol "*"), InfixL (Divide <$ symbol "/") ]
-          , [ InfixL ((:<*>:)        <$ symbol "<*>")
+          , [ InfixL ((:<*>:)        <$ (symbol "<*>" <|> symbol "⊛"))
             , InfixL ((:<*>:) . Next <$ symbol "<$>") ] ]
 
 binding :: Parser (Var, Term)

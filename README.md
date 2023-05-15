@@ -40,24 +40,24 @@ The syntax for types is as follows:
 TVar = [a-zA-Z_] [a-zA-Z_0-9']* ; (excluding keywords)
 
 Type = "(" Type ")"
-     | TVar                 ; type variables
-     | TVar Type*           ; application of type synonyms
-     | "Int"                ; integer type
-     | "0"                  ; zero/void/initial type
-     | "1"                  ; unit/terminal type
-     | Type "*" Type        ; product types
-     | Type "+" Type        ; coproduct/sum types
-     | Type "->" Type       ; function types
-     | ">" Type             ; Later types
-     | "#" Type             ; Constant types
-     | "Fix" TVar "." Type  ; fixed point types
+     | TVar                ; type variables
+     | TVar Type*          ; application of type synonyms
+     | "Int"               ; integer type
+     | "0"                 ; zero/void/initial type
+     | "1"                 ; unit/terminal type
+     | Type "*" Type       ; product types
+     | Type "+" Type       ; coproduct/sum types
+     | Type "->" Type      ; function types
+     | ">" Type            ; Later types
+     | "#" Type            ; Constant types
+     | "Fix" TVar "." Type ; fixed point types
 
 TypeDef = "type" TVar TVar* "=" Type ; type synonyms
 
 Polytype = ("forall" ("#"? TVar)+ ".")? Type
 ```
 
-`*`, `+` and `->` are right-associative.
+`*`, `+` and `->` are right-associative. Unicode syntax is supported (`μ`, `∀`, `→`, `×`, `⊤`, `⊥`, `ℤ`, `▸`, `■`).
 
 Some syntactic sugar is provided:
 
@@ -74,7 +74,6 @@ The syntax for terms is as follows:
 ```
 Var = [a-zA-Z_] [a-zA-Z_0-9']* ; (excluding keywords)
 Integer = [0-9]+
-Lambda = "λ" | "\"
 Binary = "+" | "-" | "*" | "/" | "<$>" | "<*>"
 Unary = "fst" | "snd"
       | "abort" | "left" | "right"
@@ -91,7 +90,7 @@ Term = "(" Term ")"
      | Term Term                            ; applications
      | Term Binary Term                     ; binary operators
      | Unary Term                           ; unary operators
-     | Lambda Var+ "." Term                 ; λ-abstractions
+     | "\" Var+ "." Term                    ; λ-abstractions
      | "fix" Var+ "." Term                  ; fixed points
      | "let" "{" ";"-separated(TermDef) "}" ; let expressions
        "in" Term
@@ -101,6 +100,8 @@ Term = "(" Term ")"
 
 TermDef = Var Var* "=" Term
 ```
+
+Unicode syntax is supported (`λ`, `⊛`).
 
 Some syntactic sugar is provided:
 

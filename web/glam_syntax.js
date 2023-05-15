@@ -183,16 +183,16 @@ CodeMirror.defineMode("glam", function(_config, modeConfig) {
     }
 
     setType("keyword")(
-      "case", "of", "let", "in", "fix", "Fix", "Int", "type", "forall");
+      "case", "of", "let", "in", "fix", "Fix", "type", "forall");
 
     setType("keyword")(
-      "=", "\\", "λ", ".", ":", "->", ">", "#", "+", "*");
+      "=", "\\", "λ", ".", ":", "μ", "∀", "->", "→", ">", "▸", "#", "■", "+", "*", "×");
 
     setType("builtin")(
-      "intrec", "next", "prev", "box", "unbox", "fold", "unfold", "fst", "snd", "abort", "left", "right");
+      "intrec", "next", "prev", "box", "unbox", "fold", "unfold", "fst", "snd", "abort", "left", "right", "Int");
 
     setType("builtin")(
-      "<*>", "<$>", "+", "-");
+      "<*>", "⊛", "<$>", "+", "-", "⊤", "⊥", "ℤ");
 
     var override = modeConfig.overrideKeywords;
     if (override) for (var word in override) if (override.hasOwnProperty(word))

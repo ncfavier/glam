@@ -1,12 +1,12 @@
 module Glam.Type where
 
+import Control.Monad
 import Data.List
 import Data.String
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Map (Map)
 import Data.Map qualified as Map
-import Control.Monad
 
 import Glam.Utils
 
@@ -138,28 +138,30 @@ instance Show Polytype where
 -- Parsing
 
 tVar :: Parser TVar
-tVar = mkIdentifier ["type", "Fix", "Int", "forall"]
+tVar = mkIdentifier ["type", "Fix", "μ", "Int", "ℤ", "forall"]
+
+constant = symbol "#" <|> symbol "■"
 
 type_ :: Parser Type
 type_ = tfix <|> makeExprParser base ops <?> "type"
     where
-    tfix = TFix <$ "Fix" <*> tVar <* dot <*> type_
-    base =  TInt <$ "Int"
+    tfix = TFix <$ ("Fix" <|> "μ") <*> tVar <* dot <*> type_
+    base =  TInt <$ ("Int" <|> "ℤ")
         <|> TVar <$> tVar
-        <|> One <$ symbol "1"
-        <|> Zero <$ symbol "0"
+        <|> One <$ (symbol "1" <|> symbol "⊤")
+        <|> Zero <$ (symbol "0" <|> symbol "⊥")
         <|> parens type_
-    modality =  Later <$ symbol ">"
-            <|> Constant <$ symbol "#"
+    modality =  Later <$ (symbol ">" <|> symbol "▸")
+            <|> Constant <$ constant
     ops = [ [InfixL (pure TApp)]
           , [Prefix (foldr1 (.) <$> some modality)]
-          , [binary "*" (:*:)]
-          , [binary "+" (:+:)]
-          , [binary "->" (:->:)] ]
-    binary w f = InfixR (f <$ symbol w)
+          , [binary ["*", "×"] (:*:)]
+          , [binary ["+"] (:+:)]
+          , [binary ["->", "→"] (:->:)] ]
+    binary s f = InfixR (f <$ choice (map symbol s))
 
 quantifiedTVar :: Parser (TVar, Bool)
-quantifiedTVar = flip (,) <$> option False (True <$ symbol "#") <*> tVar
+quantifiedTVar = flip (,) <$> option False (True <$ constant) <*> tVar
 
 polytype :: Parser Polytype
-polytype = Forall <$> option [] ("forall" *> some quantifiedTVar <* dot) <*> type_
+polytype = Forall <$> option [] (("forall" <|> symbol "∀") *> some quantifiedTVar <* dot) <*> type_
