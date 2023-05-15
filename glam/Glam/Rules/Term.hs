@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Glam.Inference where
+module Glam.Rules.Term (Environment(..), checkTerm, inferTerm) where
 
 import Data.Maybe
 import Data.Traversable
@@ -13,46 +13,44 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Control.Lens hiding (Fold)
 
+import Glam.Utils
 import Glam.Term
 import Glam.Type
 
-infix 1 |-
-(|-) = local
+data UnificationState = UnificationState
+    { _unifier :: Map TVar Type  -- The unifying substitution: maps metavariables to their solution
+                                 -- NOTE: there is no guarantee that this is well-scoped, but currently we don't
+                                 -- extend type contexts after metas are created.
+                                 -- This would change if we were to implement polytype signatures in let-bindings,
+                                 -- or higher-rank polymorphism, or existentials, etc.
+    , _constantTVars :: Set TVar -- Metavariables which can only represent constant types
+    , _tvars :: [TVar] }         -- A stream of fresh type variables
 
-data InferState = InferState { _unifier :: Map TVar Type  -- The unifying substitution: maps metavariables to the type they are bound to
-                                                          -- NOTE: there is no guarantee that this is well-scoped, but currently we don't
-                                                          -- extend type contexts after metas are created.
-                                                          -- This would change if we were to implement polytype signatures in let-bindings,
-                                                          -- or higher-rank polymorphism, or existentials, etc.
-                             , _constantTVars :: Set TVar -- Metavariables which can only represent constant types
-                             , _tvars :: [TVar] }         -- A stream of fresh type variables
-
-makeLenses ''InferState
+makeLenses ''UnificationState
 
 data Environment = Environment { _termCtx :: Map Var (Polytype, Bool)
                                , _typeCtx :: Map TVar Bool }
 
 makeLenses ''Environment
 
-type MonadInfer m = (MonadState InferState m, MonadReader Environment m, MonadError String m)
+type MonadCheckTerm m = (MonadState UnificationState m, MonadReader Environment m, MonadError String m)
 
-runInferT a xs env = runReaderT (evalStateT a initialInferState) env
-    where initialInferState = InferState Map.empty Set.empty (freshTVarsFor xs)
+runUnification a xs = evalStateT a $ UnificationState Map.empty Set.empty (freshTVarsFor xs)
 
-ifMeta :: MonadInfer m => Type -> (TVar -> m ()) -> m () -> m ()
+ifMeta :: MonadCheckTerm m => Type -> (TVar -> m ()) -> m () -> m ()
 ifMeta (TVar x) y n = maybe (y x) (const n) =<< view (typeCtx.at x)
 ifMeta _ _ n = n
 
-ifSolved :: MonadInfer m => TVar -> (Type -> m a) -> m a -> m a
+ifSolved :: MonadCheckTerm m => TVar -> (Type -> m a) -> m a -> m a
 ifSolved x y n = maybe n y =<< use (unifier.at x)
 
-freshTVar :: MonadInfer m => m Type
+freshTVar :: MonadCheckTerm m => m Type
 freshTVar = TVar . head <$> (tvars <<%= tail)
 freshTVars n = replicateM n freshTVar
 
 -- Replace metavariables in a type with their solutions.
 class Zonk t where
-    zonk :: MonadInfer m => t -> m t
+    zonk :: MonadCheckTerm m => t -> m t
 instance Zonk Type where
     zonk (TVar x)     = do
         s <- view (typeCtx.at x)
@@ -65,17 +63,17 @@ instance Zonk Type where
     zonk (TFix x t)   = typeCtx.at x ?~ False |- TFix x <$> zonk t
     zonk ty           = pure ty
 instance Zonk Polytype where
-    zonk (Forall xs ty) = typeCtx <>~ Map.fromList xs |- Forall xs <$> zonk ty
+    zonk (Forall xs ty) = typeCtx %~ Map.union (Map.fromList xs) |- Forall xs <$> zonk ty
 
 -- Instantiate a polytype to a type by replacing polymorphic type variables with fresh metavariables.
-instantiate :: MonadInfer m => Polytype -> m Type
+instantiate :: MonadCheckTerm m => Polytype -> m Type
 instantiate (Forall xs ty) = do
     ys <- freshTVars (length xs)
     constantTVars <>= Set.fromList [y | ((_, True), TVar y) <- zip xs ys]
     pure $ substituteType (Map.fromList (zip (map fst xs) ys)) ty
 
 -- Generalise a type to a polytype by closing on its variables that aren't free in the context.
-generalise :: MonadInfer m => Type -> m Polytype
+generalise :: MonadCheckTerm m => Type -> m Polytype
 generalise ty = do
     ty <- zonk ty
     freeInCtx <- fmap (foldMap freeTVars) . traverse (zonk . fst) =<< view termCtx
@@ -84,7 +82,7 @@ generalise ty = do
     pure $ Forall [(x, x `Set.member` constantTVars) | x <- free] ty
 
 -- Test whether a type is constant, optionally forcing it to be by marking its type variables as constant.
-constantType :: MonadInfer m => Bool -> Type -> m Bool
+constantType :: MonadCheckTerm m => Bool -> Type -> m Bool
 constantType force (TVar x) = do
     s <- view (typeCtx.at x)
     case s of
@@ -102,7 +100,7 @@ constantType force (TFix _ t)  = constantType force t
 constantType _     _           = pure True
 
 -- Test whether a term only depends on constant terms and types.
-constantTerm :: MonadInfer m => Bool -> Term -> m Bool
+constantTerm :: MonadCheckTerm m => Bool -> Term -> m Bool
 constantTerm force t = do
     ctx <- view termCtx
     and <$> traverse isConstantBinding (Map.restrictKeys ctx (freeVars t))
@@ -113,7 +111,7 @@ constantTerm force t = do
 -- Unification
 
 infix 5 !:=
-(!:=) :: MonadInfer m => TVar -> Type -> m ()
+(!:=) :: MonadCheckTerm m => TVar -> Type -> m ()
 x !:= ty = ifSolved x (!~ ty) (assign =<< zonk ty) where
     assign ty
         | ty == TVar x = pure ()
@@ -124,7 +122,7 @@ x !:= ty = ifSolved x (!~ ty) (assign =<< zonk ty) where
             unifier.at x ?= ty
 
 infix 4 !~
-(!~) :: MonadInfer m => Type -> Type -> m ()
+(!~) :: MonadCheckTerm m => Type -> Type -> m ()
 ta1 :*: tb1  !~ ta2 :*: tb2      = ta1 !~ ta2 >> tb1 !~ tb2
 ta1 :+: tb1  !~ ta2 :+: tb2      = ta1 !~ ta2 >> tb1 !~ tb2
 ta1 :->: tb1 !~ ta2 :->: tb2     = ta1 !~ ta2 >> tb1 !~ tb2
@@ -137,21 +135,19 @@ ty1          !~ ty2 | ty1 == ty2 = pure ()
     ty2 <- zonk ty2
     throwError $ "cannot match type " ++ show ty1 ++ " with " ++ show ty2
 
--- Type checking
+-- Type checking and inference
 
 intrecType :: Polytype
 intrecType = Forall [("a", False)] (("a" :->: "a") :->: "a" :->: ("a" :->: "a") :->: TInt :->: "a")
 
-class CheckInfer t where
+class Types t where
     infix 4 !:
-    (!:) :: MonadInfer m => Term -> t -> m ()
-    (?:) :: MonadInfer m => Term -> m t
+    (!:) :: MonadCheckTerm m => Term -> t -> m ()
+    (?:) :: MonadCheckTerm m => Term -> m t
 
-instance CheckInfer Type where
+instance Types Type where
     Var x !: ty = view (termCtx.at x) >>= \case
-        Just (tyx, _) -> do
-            tyx' <- instantiate tyx
-            ty !~ tyx'
+        Just (tyx, _) -> (ty !~) =<< instantiate tyx
         Nothing -> throwError $ "unbound variable " ++ x
     Int{} !: ty = ty !~ TInt
     Plus a b !: ty = do
@@ -247,7 +243,11 @@ instance CheckInfer Type where
         t !: ty
         pure ty
 
-instance CheckInfer Polytype where
-    t !: Forall xs ty = typeCtx <>~ Map.fromList xs |- t !: ty
+instance Types Polytype where
+    t !: Forall xs ty = typeCtx %~ Map.union (Map.fromList xs) |- t !: ty
 
     (?:) = (?:) >=> generalise
+
+checkTerm t ty = runUnification (t !: ty) (allTVars ty)
+
+inferTerm t = alphaNormalise <$> runUnification (t ?:) Set.empty

@@ -8,7 +8,7 @@ import Data.Map (Map)
 import Data.Map qualified as Map
 import Control.Monad
 
-import Glam.Parser
+import Glam.Utils
 
 type TVar = String
 
@@ -42,7 +42,7 @@ data Polytype = Forall [(TVar, Bool)] Type
 
 pattern Monotype ty = Forall [] ty
 
-data Guardedness = Unguarded | Guarded | Forbidden
+data Guardedness = Unguarded | Guarded | Forbidden deriving (Eq, Show)
 
 instance IsString Type where
     fromString = TVar

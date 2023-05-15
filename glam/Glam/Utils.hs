@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleInstances #-}
-module Glam.Parser (
-    module Glam.Parser,
+module Glam.Utils (
+    module Glam.Utils,
     module Text.Megaparsec,
     module Control.Monad.Combinators.Expr
 ) where
@@ -15,6 +15,8 @@ import Data.Void
 import Text.Megaparsec hiding (State, parse)
 import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer qualified as L
+
+-- Parsing
 
 type IndentRef = Maybe SourcePos
 
@@ -77,3 +79,8 @@ mkIdentifier reserved = label "identifier" $ try $ lexeme do
     if w `elem` reserved
         then fail $ "unexpected keyword " ++ w
         else pure w
+
+-- Type checking
+
+infix 1 |-
+(|-) = local

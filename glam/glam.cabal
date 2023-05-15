@@ -25,11 +25,12 @@ executable glam
     parser-combinators,
     lens
   other-modules:
+    Glam.Utils
     Glam.Term
     Glam.Type
-    Glam.Parser
+    Glam.Rules.Term
+    Glam.Rules.Type
     Glam.Run
-    Glam.Inference
   default-language:    Haskell2010
   default-extensions:
     NamedFieldPuns

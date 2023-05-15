@@ -7,7 +7,7 @@ import Data.Map.Lazy qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
 
-import Glam.Parser
+import Glam.Utils
 
 type Var = String
 
