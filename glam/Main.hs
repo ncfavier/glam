@@ -12,7 +12,7 @@ import System.Environment
 import System.Exit
 import System.IO
 
-import Glam.Interpreter
+import Glam.Run
 
 instance MonadState s m => MonadState s (InputT m) where
     get = lift get

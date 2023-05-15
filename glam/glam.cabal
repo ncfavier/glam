@@ -28,7 +28,7 @@ executable glam
     Glam.Term
     Glam.Type
     Glam.Parser
-    Glam.Interpreter
+    Glam.Run
     Glam.Inference
   default-language:    Haskell2010
   default-extensions:

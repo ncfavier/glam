@@ -2,7 +2,7 @@
 import GHCJS.Marshal
 import GHCJS.Foreign.Callback
 
-import Glam.Interpreter
+import Glam.Run
 
 foreign import javascript unsafe "glam = $1"
     setGlam :: Callback a -> IO ()

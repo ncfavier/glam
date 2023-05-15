@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
-module Glam.Interpreter where
+module Glam.Run where
 
 import Data.Functor.Identity
 import Data.Map (Map)
