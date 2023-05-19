@@ -32,8 +32,7 @@
                 color: inherit;
                 background: none;
                 border: 1px solid #30a;
-                -moz-appearance: none;
-                -webkit-appearance: none;
+                appearance: none;
             }
 
             .CodeMirror {
@@ -47,7 +46,9 @@
                 padding: 10px;
             }
         </style>
-        <script src="glam.min.js" defer></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/addon/edit/matchbrackets.min.js"></script>
+        @scripts@
     </head>
     <body>
         <h1><a id=glam href="https://github.com/ncfavier/glam">glam</a>. The guarded λ-calculus</h1>
@@ -62,9 +63,6 @@
         <textarea id=input autofocus></textarea>
         <p><button id=run>↓ Run</button></p>
         <div id=output></div>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/addon/edit/matchbrackets.min.js"></script>
-        <script src="glam_syntax.js"></script>
         <script>
             const input = CodeMirror.fromTextArea(document.querySelector('#input'), {
                 lineNumbers: true,

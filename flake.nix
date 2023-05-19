@@ -34,16 +34,22 @@
           --externs "$glam/all.js.externs" --js "$glam/all.js" --js_output_file "$out"
       '';
 
-      web = pkgs.runCommand "glam-web" {
+      web = let
+        glamjs = self.packages.${system}.glamjs;
+      in pkgs.runCommand "glam-web" {
         examples = lib.concatMapStrings ({ name, description }: ''
           <button class=example id="${name}" data-example="${
             lib.escapeXML (lib.fileContents examples/${name}.glam)
           }">${lib.escapeXML description}</button>
         '') examples;
+        scripts = ''
+          <script src="glam.min.js?v=${builtins.hashFile "sha1" glamjs}" defer></script>
+          <script src="glam_syntax.js?v=${builtins.hashFile "sha1" ./web/glam_syntax.js}"></script>
+        '';
       } ''
         mkdir -p "$out"
         cp -rT ${./web} "$out"
-        ln -s ${self.packages.${system}.glamjs} "$out/glam.min.js"
+        ln -s ${glamjs} "$out/glam.min.js"
         substituteAllInPlace "$out/index.html"
       '';
     };
