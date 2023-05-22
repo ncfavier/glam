@@ -92,7 +92,7 @@ substituteType s (t1 :+: t2) = substituteType s t1 :+: substituteType s t2
 substituteType s (t1 :->: t2) = substituteType s t1 :->: substituteType s t2
 substituteType s (Later t1) = Later (substituteType s t1)
 substituteType s (Constant t1) = Constant (substituteType s t1)
-substituteType s (TFix x tf) = TFix x' (substituteType s tf')
+substituteType s (TFix x tf) = TFix x' (substituteType (Map.delete x' s) tf')
     where (x', tf') = avoidCaptureType (foldMap freeTVars s) (x, tf)
 substituteType _ ty = ty
 
