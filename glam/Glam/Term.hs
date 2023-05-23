@@ -41,13 +41,13 @@ data Term =
 
 freeVars :: Term -> Set Var
 freeVars (Var x)        = Set.singleton x
-freeVars (Int _)        = Set.empty
+freeVars (Int _)        = mempty
 freeVars (Plus t1 t2)   = freeVars t1 <> freeVars t2
 freeVars (Minus t1 t2)  = freeVars t1 <> freeVars t2
 freeVars (Times t1 t2)  = freeVars t1 <> freeVars t2
 freeVars (Divide t1 t2) = freeVars t1 <> freeVars t2
-freeVars IntRec         = Set.empty
-freeVars Unit           = Set.empty
+freeVars IntRec         = mempty
+freeVars Unit           = mempty
 freeVars (Pair t1 t2)   = freeVars t1 <> freeVars t2
 freeVars (Fst t)        = freeVars t
 freeVars (Snd t)        = freeVars t

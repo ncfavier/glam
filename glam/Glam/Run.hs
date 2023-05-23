@@ -32,7 +32,7 @@ makeLenses ''GlamState
 type MonadGlam = MonadState GlamState
 
 runGlamT :: Monad m => StateT GlamState m a -> m a
-runGlamT a = evalStateT a (GlamState Map.empty Map.empty)
+runGlamT a = evalStateT a (GlamState mempty mempty)
 
 runGlam = runIdentity . runGlamT
 
@@ -48,7 +48,7 @@ withTypes a = do
 
 withTerms a = do
     ts <- use termBindings
-    let env = Environment (Map.mapMaybe (\(t, ty) -> (ty, True) <$ t) ts) Map.empty
+    let env = Environment (Map.mapMaybe (\(t, ty) -> (ty, True) <$ t) ts) mempty
     runReaderT a env
 
 getWords :: MonadGlam m => m [Var]

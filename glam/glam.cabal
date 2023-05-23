@@ -20,6 +20,7 @@ executable glam
   build-depends:
     base >= 4.12.0.0 && < 5,
     containers,
+    transformers,
     mtl,
     megaparsec,
     parser-combinators,
@@ -46,6 +47,7 @@ executable glam
     ConstraintKinds
     NoMonomorphismRestriction
     ImportQualifiedPost
+    TupleSections
   ghc-options:         -W
   ghcjs-options:       -dedupe
 

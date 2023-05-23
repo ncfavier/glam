@@ -84,3 +84,9 @@ mkIdentifier reserved = label "identifier" $ try $ lexeme do
 
 infix 1 |-
 (|-) = local
+
+lookupLevel :: Eq a => a -> [(a, b)] -> Maybe (b, Int)
+lookupLevel _ [] = Nothing
+lookupLevel x ((y, c):ys)
+    | x == y = Just (c, length ys)
+    | otherwise = lookupLevel x ys

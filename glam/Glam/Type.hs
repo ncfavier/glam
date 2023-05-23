@@ -59,7 +59,7 @@ instance HasTVars Type where
     freeTVars (Later t)    = freeTVars t
     freeTVars (Constant t) = freeTVars t
     freeTVars (TFix x t)   = Set.delete x (freeTVars t)
-    freeTVars _            = Set.empty
+    freeTVars _            = mempty
     allTVars (TVar x)     = Set.singleton x
     allTVars (t1 :*: t2)  = allTVars t1 <> allTVars t2
     allTVars (t1 :+: t2)  = allTVars t1 <> allTVars t2
@@ -67,7 +67,7 @@ instance HasTVars Type where
     allTVars (Later t)    = allTVars t
     allTVars (Constant t) = allTVars t
     allTVars (TFix x t)   = Set.insert x (allTVars t)
-    allTVars _            = Set.empty
+    allTVars _            = mempty
 
 instance HasTVars Polytype where
     freeTVars (Forall (map fst -> xs) ty) = freeTVars ty Set.\\ Set.fromList xs
@@ -140,7 +140,7 @@ instance Show Polytype where
 tVar :: Parser TVar
 tVar = mkIdentifier ["type", "Fix", "μ", "Int", "ℤ", "forall"]
 
-constant = symbol "#" <|> symbol "■"
+tConstant = symbol "#" <|> symbol "■"
 
 type_ :: Parser Type
 type_ = tfix <|> makeExprParser base ops <?> "type"
@@ -152,7 +152,7 @@ type_ = tfix <|> makeExprParser base ops <?> "type"
         <|> Zero <$ (symbol "0" <|> symbol "⊥")
         <|> parens type_
     modality =  Later <$ (symbol ">" <|> symbol "▸")
-            <|> Constant <$ constant
+            <|> Constant <$ tConstant
     ops = [ [InfixL (pure TApp)]
           , [Prefix (foldr1 (.) <$> some modality)]
           , [binary ["*", "×"] (:*:)]
@@ -161,7 +161,7 @@ type_ = tfix <|> makeExprParser base ops <?> "type"
     binary s f = InfixR (f <$ choice (map symbol s))
 
 quantifiedTVar :: Parser (TVar, Bool)
-quantifiedTVar = flip (,) <$> option False (True <$ constant) <*> tVar
+quantifiedTVar = flip (,) <$> option False (True <$ tConstant) <*> tVar
 
 polytype :: Parser Polytype
 polytype = Forall <$> option [] (("forall" <|> symbol "∀") *> some quantifiedTVar <* dot) <*> type_

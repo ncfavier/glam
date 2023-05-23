@@ -1,125 +1,145 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Glam.Rules.Term (Environment(..), checkTerm, inferTerm) where
 
-import Data.Maybe
 import Data.Traversable
 import Data.Map (Map)
 import Data.Map qualified as Map
-import Data.Set (Set)
 import Data.Set qualified as Set
 import Control.Monad
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
+import Control.Monad.Trans.Maybe
 import Control.Lens hiding (Fold)
 
 import Glam.Utils
 import Glam.Term
 import Glam.Type
 
+data Meta = Meta { _solution :: Maybe Type, _constant :: Bool, _level :: Int }
+
+makeLenses ''Meta
+
 data UnificationState = UnificationState
-    { _unifier :: Map TVar Type  -- The unifying substitution: maps metavariables to their solution
-                                 -- NOTE: there is no guarantee that this is well-scoped, but currently we don't
-                                 -- extend type contexts after metas are created.
-                                 -- This would change if we were to implement polytype signatures in let-bindings,
-                                 -- or higher-rank polymorphism, or existentials, etc.
-    , _constantTVars :: Set TVar -- Metavariables which can only represent constant types
-    , _tvars :: [TVar] }         -- A stream of fresh type variables
+    { _metas :: Map TVar Meta -- Metavariables
+    , _tvars :: [TVar] }      -- A stream of fresh type variables
 
 makeLenses ''UnificationState
 
 data Environment = Environment { _termCtx :: Map Var (Polytype, Bool)
-                               , _typeCtx :: Map TVar Bool }
+                               , _typeCtx :: [(TVar, Bool)] }
 
 makeLenses ''Environment
 
 type MonadCheckTerm m = (MonadState UnificationState m, MonadReader Environment m, MonadError String m)
 
-runUnification a xs = evalStateT a $ UnificationState Map.empty Set.empty (freshTVarsFor xs)
+runUnification a xs = evalStateT a $ UnificationState mempty (freshTVarsFor xs)
 
-ifMeta :: MonadCheckTerm m => Type -> (TVar -> m ()) -> m () -> m ()
-ifMeta (TVar x) y n = maybe (y x) (const n) =<< view (typeCtx.at x)
+viewTVar :: MonadCheckTerm m => TVar -> m (Either Meta Bool)
+viewTVar x = maybe (throwError $ "unbound type variable " ++ x) pure =<< runMaybeT (
+    Right <$> MaybeT (lookup x <$> view typeCtx) <|> Left <$> MaybeT (use (metas.at x)))
+
+ifMeta :: MonadCheckTerm m => Type -> ((TVar, Meta) -> m ()) -> m () -> m ()
+ifMeta (TVar x) y n = maybe n (curry y x) =<< use (metas.at x)
 ifMeta _ _ n = n
 
-ifSolved :: MonadCheckTerm m => TVar -> (Type -> m a) -> m a -> m a
-ifSolved x y n = maybe n y =<< use (unifier.at x)
+freshTVar :: MonadCheckTerm m => m TVar
+freshTVar = head <$> (tvars <<%= tail)
 
-freshTVar :: MonadCheckTerm m => m Type
-freshTVar = TVar . head <$> (tvars <<%= tail)
-freshTVars n = replicateM n freshTVar
+newMeta' :: MonadCheckTerm m => Bool -> m Type
+newMeta' c = do
+    x <- freshTVar
+    l <- length <$> view typeCtx
+    metas.at x ?= Meta Nothing c l
+    pure (TVar x)
+newMeta = newMeta' False
+newMetas n = replicateM n newMeta
 
 -- Replace metavariables in a type with their solutions.
 class Zonk t where
     zonk :: MonadCheckTerm m => t -> m t
 instance Zonk Type where
-    zonk (TVar x)     = do
-        s <- view (typeCtx.at x)
-        if isJust s then pure (TVar x) else ifSolved x zonk (pure (TVar x))
+    zonk ty@(TVar x)  = viewTVar x >>= \case
+        Left m | Just sol <- m ^. solution -> zonk sol
+        _ -> pure ty
     zonk (a :*: b)    = (:*:) <$> zonk a <*> zonk b
     zonk (a :+: b)    = (:+:) <$> zonk a <*> zonk b
     zonk (a :->: b)   = (:->:) <$> zonk a <*> zonk b
     zonk (Later t)    = Later <$> zonk t
     zonk (Constant t) = Constant <$> zonk t
-    zonk (TFix x t)   = typeCtx.at x ?~ False |- TFix x <$> zonk t
+    zonk (TFix x t)   = typeCtx %~ ((x, False):) |- TFix x <$> zonk t
     zonk ty           = pure ty
 instance Zonk Polytype where
-    zonk (Forall xs ty) = typeCtx %~ Map.union (Map.fromList xs) |- Forall xs <$> zonk ty
+    zonk (Forall xs ty) = typeCtx %~ (xs ++) |- Forall xs <$> zonk ty
 
 -- Instantiate a polytype to a type by replacing polymorphic type variables with fresh metavariables.
 instantiate :: MonadCheckTerm m => Polytype -> m Type
+instantiate (Monotype ty) = pure ty
 instantiate (Forall xs ty) = do
-    ys <- freshTVars (length xs)
-    constantTVars <>= Set.fromList [y | ((_, True), TVar y) <- zip xs ys]
-    pure $ substituteType (Map.fromList (zip (map fst xs) ys)) ty
+    s <- for xs \(x, c) -> (x,) <$> newMeta' c
+    pure $ substituteType (Map.fromList s) ty
 
--- Generalise a type to a polytype by closing on its variables that aren't free in the context.
+-- Generalise a type to a polytype by closing on its metavariables that aren't free in the context.
 generalise :: MonadCheckTerm m => Type -> m Polytype
 generalise ty = do
     ty <- zonk ty
     freeInCtx <- fmap (foldMap freeTVars) . traverse (zonk . fst) =<< view termCtx
-    constantTVars <- use constantTVars
-    let free = Set.toList (freeTVars ty Set.\\ freeInCtx)
-    pure $ Forall [(x, x `Set.member` constantTVars) | x <- free] ty
+    metas <- use metas
+    let generalisable = metas `Map.restrictKeys` freeTVars ty `Map.withoutKeys` freeInCtx
+    pure $ Forall [(x, m ^. constant) | (x, m) <- Map.toList generalisable] ty
 
--- Test whether a type is constant, optionally forcing it to be by marking its type variables as constant.
-constantType :: MonadCheckTerm m => Bool -> Type -> m Bool
-constantType force (TVar x) = do
-    s <- view (typeCtx.at x)
-    case s of
-        Just False | force -> throwError $ "non-constant type variable " ++ x
-        Just constant -> pure constant
-        Nothing | force     -> constantTVars.contains x <.= True
-                | otherwise -> use (constantTVars.contains x)
-constantType force (t1 :*: t2) = (&&) <$> constantType force t1 <*> constantType force t2
-constantType force (t1 :+: t2) = (&&) <$> constantType force t1 <*> constantType force t2
-constantType force (_ :->: t2) = constantType force t2
-constantType force ty@Later{}
-    | force                    = throwError $ "non-constant type " ++ show ty
-    | otherwise                = pure False
-constantType force (TFix _ t)  = constantType force t
-constantType _     _           = pure True
+-- Constant types and terms
 
--- Test whether a term only depends on constant terms and types.
-constantTerm :: MonadCheckTerm m => Bool -> Term -> m Bool
-constantTerm force t = do
-    ctx <- view termCtx
-    and <$> traverse isConstantBinding (Map.restrictKeys ctx (freeVars t))
-    where
-    isConstantBinding (_, True) = pure True
-    isConstantBinding (ty, False) = constantType force =<< zonk =<< instantiate ty
+class Constant t where
+    -- Test whether a type or term is constant, optionally forcing it to be by marking its metavariables as constant.
+    isConstant :: MonadCheckTerm m => Bool -> t -> m Bool
+
+instance Constant Type where
+    isConstant force (TVar x) = viewTVar x >>= \case
+        Left m | Just sol <- m ^. solution ->
+                    if m ^. constant then pure True else isConstant force sol
+            | force -> metas.ix x.constant <.= True
+            | otherwise -> pure (m ^. constant)
+        Right c -> c <$ when (force && not c) (throwError $ "non-constant type variable " ++ x)
+    isConstant force (t1 :*: t2) = (&&) <$> isConstant force t1 <*> isConstant force t2
+    isConstant force (t1 :+: t2) = (&&) <$> isConstant force t1 <*> isConstant force t2
+    isConstant force (_ :->: t2) = isConstant force t2
+    isConstant force ty@Later{}
+        | force                    = throwError $ "non-constant type " ++ show ty
+        | otherwise                = pure False
+    isConstant force (TFix x t)  = typeCtx %~ ((x, False):) |- isConstant force t -- if the type is well-formed, we'll never encounter x
+    isConstant _     _           = pure True
+
+instance Constant Polytype where
+    isConstant force (Forall xs ty) = typeCtx %~ (xs ++) |- isConstant force ty
+
+instance Constant Term where
+    isConstant force t = do
+        ctx <- view termCtx
+        and <$> traverse constantBinding (ctx `Map.restrictKeys` freeVars t)
+        where
+        constantBinding (_, True) = pure True
+        constantBinding (ty, False) = isConstant force ty
 
 -- Unification
 
 infix 5 !:=
-(!:=) :: MonadCheckTerm m => TVar -> Type -> m ()
-x !:= ty = ifSolved x (!~ ty) (assign =<< zonk ty) where
+(!:=) :: MonadCheckTerm m => (TVar, Meta) -> Type -> m ()
+(x, meta) !:= ty
+    | Just sol <- meta ^. solution = sol !~ ty
+    | otherwise = assign =<< zonk ty where
     assign ty
         | ty == TVar x = pure ()
         | x `freeInType` ty = throwError $ "cannot construct infinite type " ++ x ++ " ~ " ++ show ty
         | otherwise = do
-            constant <- use (constantTVars.contains x)
-            when constant $ () <$ constantType True ty -- a constant type variable can only be unified with a constant type
-            unifier.at x ?= ty
+            ctx <- view typeCtx
+            let escaped = [x | x <- Set.toList (freeTVars ty)
+                             , Just (_, l) <- [lookupLevel x ctx]
+                             , l >= meta ^. level]
+            unless (null escaped) $ throwError $
+                "cannot unify " ++ x ++ " with " ++ show ty ++ ": type variables " ++ show (map TVar escaped) ++ " would escape their scope"
+            when (meta ^. constant) $ () <$ isConstant True ty
+            metas.ix x.solution ?= ty
 
 infix 4 !~
 (!~) :: MonadCheckTerm m => Type -> Type -> m ()
@@ -128,9 +148,8 @@ ta1 :+: tb1  !~ ta2 :+: tb2      = ta1 !~ ta2 >> tb1 !~ tb2
 ta1 :->: tb1 !~ ta2 :->: tb2     = ta1 !~ ta2 >> tb1 !~ tb2
 Later ty1    !~ Later ty2        = ty1 !~ ty2
 Constant ty1 !~ Constant ty2     = ty1 !~ ty2
-TFix x1 tf1  !~ TFix x2 tf2      = tf1 !~ substituteType1 x2 (TVar x1) tf2
-ty1          !~ ty2 | ty1 == ty2 = pure ()
-                    | otherwise  = ifMeta ty1 (!:= ty2) $ ifMeta ty2 (!:= ty1) do
+TFix x1 tf1  !~ TFix x2 tf2      = typeCtx %~ ((x1, False):) |- tf1 !~ substituteType1 x2 (TVar x1) tf2
+ty1          !~ ty2              = ifMeta ty1 (!:= ty2) $ ifMeta ty2 (!:= ty1) $ unless (ty1 == ty2) do
     ty1 <- zonk ty1
     ty2 <- zonk ty2
     throwError $ "cannot match type " ++ show ty1 ++ " with " ++ show ty2
@@ -169,43 +188,43 @@ instance Types Type where
     IntRec !: ty = (ty !~) =<< instantiate intrecType
     Unit !: ty = ty !~ One
     Pair a b !: ty = do
-        ~[ta, tb] <- freshTVars 2
+        ~[ta, tb] <- newMetas 2
         ty !~ ta :*: tb
         a !: ta
         b !: tb
     Fst t !: ty = do
-        tb <- freshTVar
+        tb <- newMeta
         t !: ty :*: tb
     Snd t !: ty = do
-        ta <- freshTVar
+        ta <- newMeta
         t !: ta :*: ty
     Abort t !: _ = t !: Zero
     InL t !: ty = do
-        ~[ta, tb] <- freshTVars 2
+        ~[ta, tb] <- newMetas 2
         ty !~ ta :+: tb
         t !: ta
     InR t !: ty = do
-        ~[ta, tb] <- freshTVars 2
+        ~[ta, tb] <- newMetas 2
         ty !~ ta :+: tb
         t !: tb
     Case t ~(Abs x1 t1) ~(Abs x2 t2) !: ty = do
-        ~[ta, tb] <- freshTVars 2
+        ~[ta, tb] <- newMetas 2
         t !: ta :+: tb
-        constant <- constantTerm False t
+        constant <- isConstant False t
         termCtx.at x1 ?~ (Monotype ta, constant) |- t1 !: ty
         termCtx.at x2 ?~ (Monotype tb, constant) |- t2 !: ty
     Abs x t !: ty = do
-        ~[ta, tb] <- freshTVars 2
+        ~[ta, tb] <- newMetas 2
         ty !~ ta :->: tb
         termCtx.at x ?~ (Monotype ta, False) |- t !: tb
     s :$: t !: ty = do
-        ta <- freshTVar
+        ta <- newMeta
         s !: ta :->: ty
         t !: ta
     Let s t !: ty = do
         e <- for s \t' -> do
             ty <- (t' ?:)
-            constant <- constantTerm False t'
+            constant <- isConstant False t'
             pure (ty, constant)
         termCtx %~ Map.union e |- t !: ty
     Fold t !: ty = do
@@ -220,34 +239,34 @@ instance Types Type where
             _ -> throwError $ "bad type for unfold: " ++ show ty'
     Fix ~(Abs x t) !: ty = termCtx.at x ?~ (Monotype (Later ty), False) |- t !: ty
     Next t !: ty = do
-        ta <- freshTVar
+        ta <- newMeta
         ty !~ Later ta
         t !: ta
     Prev t !: ty = do
         t !: Later ty
-        () <$ constantTerm True t
+        () <$ isConstant True t
     s :<*>: t !: ty = do
-        ~[ta, tb] <- freshTVars 2
+        ~[ta, tb] <- newMetas 2
         ty !~ Later ta
         t !: Later tb
         s !: Later (tb :->: ta)
     Box t !: ty = do
-        ta <- freshTVar
+        ta <- newMeta
         ty !~ Constant ta
         t !: ta
-        () <$ constantTerm True t
+        () <$ isConstant True t
     Unbox t !: ty = t !: Constant ty
 
     (?:) t = do
-        ty <- freshTVar
+        ty <- newMeta
         t !: ty
         pure ty
 
 instance Types Polytype where
-    t !: Forall xs ty = typeCtx %~ Map.union (Map.fromList xs) |- t !: ty
+    t !: Forall xs ty = typeCtx %~ (xs ++) |- t !: ty
 
     (?:) = (?:) >=> generalise
 
 checkTerm t ty = runUnification (t !: ty) (allTVars ty)
 
-inferTerm t = alphaNormalise <$> runUnification (t ?:) Set.empty
+inferTerm t = alphaNormalise <$> runUnification (t ?:) mempty
