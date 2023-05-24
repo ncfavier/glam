@@ -1,3 +1,4 @@
+-- | Syntax and evaluation of terms.
 module Glam.Term where
 
 import Data.Function
@@ -6,38 +7,33 @@ import Data.Map.Lazy (Map)
 import Data.Map.Lazy qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
+import Text.Megaparsec
+import Control.Monad.Combinators.Expr
 
 import Glam.Utils
 
+-- | Variables
 type Var = String
 
+-- | Substitutions
 type Subst = Map Var Term
 
 infixl :<*>:
 infixl 9 :$:
 
-data Term =
-    -- Variables
-      Var Var
-    -- Integers
-    | Int Integer | Plus Term Term | Minus Term Term | Times Term Term | Divide Term Term | IntRec
-    -- Products
-    | Unit | Pair Term Term | Fst Term | Snd Term
-    -- Sums
-    | Abort Term | InL Term | InR Term | Case Term Term Term
-    -- Functions
-    | Abs Var Term | Term :$: Term
-    -- Let-bindings
-    | Let Subst Term
-    -- Recursion operations
-    | Fold Term | Unfold Term | Fix Term
-    -- 'Later' operations
-    | Next Term | Prev Term | Term :<*>: Term
-    -- 'Constant' operations
-    | Box Term | Unbox Term
-    deriving Eq
+-- | Terms of the guarded λ-calculus
+data Term = Var Var -- ^ Variables
+          | Int Integer | Plus Term Term | Minus Term Term | Times Term Term | Divide Term Term | IntRec -- ^ Integers
+          | Unit | Pair Term Term | Fst Term | Snd Term -- ^ Products
+          | Abort Term | InL Term | InR Term | Case Term Term Term -- ^ Sums
+          | Abs Var Term | Term :$: Term -- ^ Functions
+          | Let Subst Term -- ^ Let-bindings
+          | Fold Term | Unfold Term | Fix Term -- ^ Guarded recursion
+          | Next Term | Prev Term | Term :<*>: Term -- ^ @▸@ operations
+          | Box Term | Unbox Term -- ^ @■@ operations
+          deriving Eq
 
--- Variables
+-- * Free variables
 
 freeVars :: Term -> Set Var
 freeVars (Var x)        = Set.singleton x
@@ -70,8 +66,10 @@ freeVars (Unbox t)      = freeVars t
 freeIn :: Var -> Term -> Bool
 x `freeIn` t = x `Set.member` freeVars t
 
--- Evaluation
+-- * Evaluation
 
+-- | Values are basically destructor-free terms, with abstractions represented
+-- in a higher-order way.
 data Value = VInt !Integer
            | VUnit | VPair Value Value
            | VInL Value | VInR Value
@@ -87,6 +85,7 @@ intrec p z s = go where
         EQ -> z
         GT -> s (go (pred n))
 
+-- | Evaluate a term in the given environment.
 eval :: Map Var Value -> Term -> Value
 eval s (Var x)          = s Map.! x
 eval _ (Int i)          = VInt i
@@ -118,7 +117,7 @@ eval s (t1 :<*>: t2)    = case (eval s t1, eval s t2) of ~(VNext (VAbs f), VNext
 eval s (Box t)          = VBox (eval s t)
 eval s (Unbox t)        = case eval s t of ~(VBox t) -> t
 
--- Printing
+-- * Printing
 
 showSubst s = intercalate "; " [v ++ " = " ++ show t | (v, t) <- Map.assocs s]
 
@@ -200,7 +199,7 @@ instance Show Value where
     showsPrec d (VBox t) = showParen (d > appPrec) $
         showString "box " . showsPrec (appPrec + 1) t
 
--- Parsing
+-- * Parsing
 
 variable :: Parser Var
 variable = mkIdentifier

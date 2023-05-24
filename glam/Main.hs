@@ -22,7 +22,7 @@ err = liftIO . hPutStrLn stderr
 
 usage = "usage: glam [options...] files..."
 
-options = [Option ['i'] ["interactive"] (NoArg ()) "run in interactive mode (default if no files provided)"]
+options = [Option ['i'] ["interactive"] (NoArg ()) "run in interactive mode (default if no files are provided)"]
 
 parseArgs = do
     args <- getArgs

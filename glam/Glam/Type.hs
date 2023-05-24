@@ -1,3 +1,4 @@
+-- | The basic syntax and operations on types.
 module Glam.Type where
 
 import Control.Monad
@@ -7,45 +8,52 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Map (Map)
 import Data.Map qualified as Map
+import Text.Megaparsec
+import Control.Monad.Combinators.Expr
 
 import Glam.Utils
 
+-- | Type variables
 type TVar = String
 
+-- | Type substitutions
 type TSubst = Map TVar Type
+
+-- | Whether a type, or term, is constant. Note that 'False' means "we don't know".
+type Constancy = Bool
+
+-- | A fixed point variable can only be used when it is /guarded/ by a @▸@ modality.
+data Guardedness = Unguarded -- ^ Can't use it yet
+                 | Guarded -- ^ OK, under @▸@
+                 | Forbidden -- ^ No way, we're under @■@
+                 deriving Eq
 
 infixr 7 :*:
 infixr 6 :+:
 infixr 5 :->:
 
-data Type =
-    -- Type variables
-      TVar TVar
-    -- Base types
-    | TInt
-    -- Type applications
-    | TApp Type Type
-    -- Products
-    | One | Type :*: Type
-    -- Sums
-    | Zero | Type :+: Type
-    -- Functions
-    | Type :->: Type
-    -- Modalities
-    | Later Type | Constant Type
-    -- Fixed points
-    | TFix TVar Type
-    deriving Eq
+-- | Monomorphic types of the guarded λ-calculus
+data Type = TVar TVar -- ^ Variables
+          | TInt -- ^ Integers
+          | TApp Type Type -- ^ Applications
+          | One | Type :*: Type -- ^ Products
+          | Zero | Type :+: Type -- ^ Sums
+          | Type :->: Type -- ^ Functions
+          | Later Type -- ^ @▸@ modality
+          | Constant Type -- ^ @■@ modality
+          | TFix TVar Type -- ^ Fixed points
+          deriving Eq
 
-data Polytype = Forall [(TVar, Bool)] Type
+-- | Polymorphic type schemes
+data Polytype = Forall [(TVar, Constancy)] Type
               deriving Eq
 
 pattern Monotype ty = Forall [] ty
 
-data Guardedness = Unguarded | Guarded | Forbidden deriving (Eq, Show)
-
 instance IsString Type where
     fromString = TVar
+
+-- * Variables and substitution
 
 class HasTVars t where
     freeTVars :: t -> Set TVar
@@ -103,7 +111,7 @@ alphaNormalise pty@(Forall as ty) = Forall [(b, c) | ((_, c), b) <- s] ty' where
     s = zip as (freshTVarsFor (freeTVars pty))
     ty' = substituteType (Map.fromList [(a, TVar b) | ((a, _), b) <- s]) ty
 
--- Printing
+-- * Printing
 
 prodPrec = 6
 sumPrec = 4
@@ -135,7 +143,7 @@ instance Show Polytype where
     showsPrec _ (Forall [] ty) = shows ty
     showsPrec _ (Forall xs ty) = showString "forall " . showString (intercalate " " [(if c then "#" else "") ++ x | (x, c) <- xs]) . showString ". " . shows ty
 
--- Parsing
+-- * Parsing
 
 tVar :: Parser TVar
 tVar = mkIdentifier ["type", "Fix", "μ", "Int", "ℤ", "forall"]
@@ -160,7 +168,7 @@ type_ = tfix <|> makeExprParser base ops <?> "type"
           , [binary ["->", "→"] (:->:)] ]
     binary s f = InfixR (f <$ choice (map symbol s))
 
-quantifiedTVar :: Parser (TVar, Bool)
+quantifiedTVar :: Parser (TVar, Constancy)
 quantifiedTVar = flip (,) <$> option False (True <$ tConstant) <*> tVar
 
 polytype :: Parser Polytype

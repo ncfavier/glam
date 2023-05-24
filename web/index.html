@@ -13,6 +13,7 @@
             body {
                 font-family: 'Source Serif Pro', serif;
                 padding: 20px 100px;
+                --accent: #30a;
             }
 
             h1 {
@@ -21,7 +22,7 @@
 
             a {
                 font-weight: bold;
-                color: #30a;
+                color: var(--accent);
             }
 
             button {
@@ -31,7 +32,7 @@
                 font-family: inherit;
                 color: inherit;
                 background: none;
-                border: 1px solid #30a;
+                border: 1px solid var(--accent);
                 appearance: none;
             }
 
@@ -54,7 +55,9 @@
         <h1><a id=glam href="https://github.com/ncfavier/glam">glam</a>. The guarded λ-calculus</h1>
         <p>
             Based on Ranald Clouston, Aleš Bizjak, Hans Bugge Grathwohl and Lars Birkedal's <a href="https://arxiv.org/pdf/1606.09455.pdf">paper</a>.
-            Also see my <a href="https://monade.li/glam.pdf">internship report</a> and the <a href="https://git.monade.li/glam">source code</a> for details.
+        </p>
+        <p>
+            Also see my <a href="https://monade.li/glam.pdf">internship report</a> and the <a href="https://github.com/ncfavier/glam">source code</a> (or generated <a href="doc/">documentation</a>) for details. If you find a bug, please <a href="https://github.com/ncfavier/glam/issues/new">report</a> it!
         </p>
         <p>
             Examples:

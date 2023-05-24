@@ -1,5 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Glam.Run (runGlamT, runGlam, runFile, getType, getWords) where
+-- | The glam interpreter
+module Glam.Run where
 
 import Data.Functor.Identity
 import Data.Map (Map)
@@ -11,6 +12,7 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Writer
 import Control.Lens
+import Text.Megaparsec hiding (parse)
 
 import Glam.Utils
 import Glam.Term
@@ -18,10 +20,11 @@ import Glam.Type
 import Glam.Rules.Term
 import Glam.Rules.Type
 
-data Statement = TypeDef TVar [TVar] Type
-               | Signature Var Polytype
-               | Def Var Term
-               | Eval Term
+-- | Program statements
+data Statement = TypeDef TVar [TVar] Type -- ^ Type synonym definitions
+               | Signature Var Polytype -- ^ Type signatures
+               | Def Var Term -- ^ Definitions
+               | Eval Term -- ^ Evaluate and print a term
                deriving (Eq, Show)
 
 data GlamState = GlamState { _termBindings :: Map Var (Maybe Value, Polytype)

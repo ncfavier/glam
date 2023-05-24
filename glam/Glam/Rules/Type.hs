@@ -1,9 +1,11 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
-module Glam.Rules.Type (TEnvironment, TVarBinding(..), checkPolytype, checkTypeSynonym) where
+-- | The rules for checking types.
+module Glam.Rules.Type where
 
 import Data.Map (Map)
 import Data.Map qualified as Map
+import Data.Monoid
 import Control.Monad.Except hiding (guard)
 import Control.Monad.Reader hiding (guard)
 import Control.Monad.Writer hiding (guard)
@@ -12,9 +14,16 @@ import Control.Lens
 import Glam.Utils
 import Glam.Type
 
-data TVarBinding = Syn [TVar] Type
-                 | Self { _guardedness :: Guardedness, arguments :: Maybe [TVar] }
-                 | Bound
+-- | Things a type variable can refer to
+data TVarBinding =
+    -- | A type synonym (with a list of arguments)
+      Syn [TVar] Type
+    -- | A fixed point
+    | Self { _guardedness :: Guardedness
+           , arguments :: Maybe [TVar] -- ^ If this is the type synonym we're defining, contains its arguments
+           }
+    -- | Anything else
+    | Bound
 
 makeLenses ''TVarBinding
 
@@ -22,10 +31,15 @@ type TEnvironment = Map TVar TVarBinding
 
 type MonadCheckType m = (MonadReader TEnvironment m, MonadError String m)
 
+-- | Going under a @▸@
 guard :: Guardedness -> Guardedness
 guard Unguarded = Guarded
 guard x = x
 
+-- | Check that a type is well-formed and expand type synonyms.
+-- This handles desugaring recursive uses of type synonyms to fixed points:
+-- if the current type synonym is used (and applied to the same arguments),
+-- the second return value contains the fixed point variable to abstract over.
 checkType :: MonadCheckType m => Type -> m (Type, First TVar)
 checkType = runWriterT . go where
   go ty@TVar{}     = apply ty []
@@ -56,12 +70,14 @@ checkType = runWriterT . go where
             | otherwise -> throwError $ "not a type constructor: " ++ x
   apply ty _ = throwError $ "not a type constructor: " ++ show ty
 
+-- | Check a polytype
 checkPolytype :: MonadCheckType m => Polytype -> m Polytype
 checkPolytype (Forall as ty) = do
     let scope = Map.fromList [(a, Bound) | (a, _) <- as]
     (ty', _) <- Map.union scope |- checkType ty
     pure $ Forall as ty'
 
+-- | Check a type synonym definition
 checkTypeSynonym :: MonadCheckType m => TVar -> [TVar] -> Type -> m Type
 checkTypeSynonym x ys ty = do
     let scope = Map.fromList $ (x, Self Unguarded (Just ys)) : [(y, Bound) | y <- ys]

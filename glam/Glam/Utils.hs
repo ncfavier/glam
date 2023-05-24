@@ -1,12 +1,8 @@
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleInstances #-}
-module Glam.Utils (
-    module Glam.Utils,
-    module Text.Megaparsec,
-    module Control.Monad.Combinators.Expr
-) where
+module Glam.Utils where
 
-import Control.Monad.Combinators.Expr
 import Control.Monad.Reader
 import Data.Bifunctor (first)
 import Data.Char
@@ -16,7 +12,7 @@ import Text.Megaparsec hiding (State, parse)
 import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer qualified as L
 
--- Parsing
+-- * Parsing
 
 type IndentRef = Maybe SourcePos
 
@@ -80,11 +76,12 @@ mkIdentifier reserved = label "identifier" $ try $ lexeme do
         then fail $ "unexpected keyword " ++ w
         else pure w
 
--- Type checking
+-- * Type checking
 
 infix 1 |-
 (|-) = local
 
+-- | Like 'lookup', but also returns the de Bruijn /level/ of the variable.
 lookupLevel :: Eq a => a -> [(a, b)] -> Maybe (b, Int)
 lookupLevel _ [] = Nothing
 lookupLevel x ((y, c):ys)

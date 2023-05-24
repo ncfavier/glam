@@ -4,6 +4,8 @@
 
 Please refer to those papers for basic motivation and introduction to the language, as well as a description of its type system, operational and denotational semantics. This README only covers the specifics of my implementation.
 
+An [online demo](https://glam.monade.li) is available, as well as [rendered documentation](https://glam.monade.li/doc).
+
 - [Usage](#usage)
 - [Syntax](#syntax)
   - [Types](#types)
@@ -21,12 +23,10 @@ This project is built using Cabal (`cabal build`).
 
 ```
 usage: glam [options...] files...
-  -i  --interactive  run in interactive mode (default if no files provided)
+  -i  --interactive  run in interactive mode (default if no files are provided)
 ```
 
 The interactive mode gives you a REPL that will execute statements and display their results. It also provides a `:type` command that displays the type of a given term.
-
-Alternatively, an [online demo](https://glam.monade.li) is available.
 
 ## Syntax
 
@@ -187,6 +187,13 @@ The `box t` and `prev t` constructs require `t` to be boxable. This makes the ex
 
 ## To do
 
+- Infer types for `fold` and `unfold` via higher-orderish unification. This should type-check:
+  ```
+  type CoNat = 1 + >CoNat
+  rec : forall a. a -> (>a -> a) -> CoNat -> a
+  rec z s = let { go n = case unfold n of { left _. z; right m. s (go <*> m) } } in go
+  ```
+  (Note that it does if you use `fix go.`)
 - Better type error reporting.
 - Make semicolons and braces optional using something like Haskell's layout rules.
 - Add infix operators.

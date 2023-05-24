@@ -1,5 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Glam.Rules.Term (Environment(..), checkTerm, inferTerm) where
+-- | The rules for type checking and type inference.
+module Glam.Rules.Term where
 
 import Data.Traversable
 import Data.Map (Map)
@@ -11,31 +12,46 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Trans.Maybe
 import Control.Lens hiding (Fold)
+import Text.Megaparsec
 
 import Glam.Utils
 import Glam.Term
 import Glam.Type
 
-data Meta = Meta { _solution :: Maybe Type, _constant :: Bool, _level :: Int }
+data Environment = Environment
+    { _termCtx :: Map Var (Polytype, Constancy) -- ^ The term context
+    , _typeCtx :: [(TVar, Constancy)] -- ^ The type context
+    }
+
+makeLenses ''Environment
+
+-- | A metavariable: a placeholder for a type to be determined later (or generalised over).
+data Meta = Meta
+    { _solution :: Maybe Type -- ^ The metavariable's solution
+    , _constant :: Constancy
+    , _level :: Int -- ^ The de Bruijn level at which this metavariable was created.
+                    -- Solutions may not contain variables introduced later, as they would escape their scope.
+                    -- An invariant is that (currently) fixed point variables are never in scope of a metavariable, so we
+                    -- don't have to worry about substitution.
+    }
 
 makeLenses ''Meta
 
 data UnificationState = UnificationState
-    { _metas :: Map TVar Meta -- Metavariables
-    , _tvars :: [TVar] }      -- A stream of fresh type variables
+    { _metas :: Map TVar Meta -- ^ Metavariables
+    , _tvars :: [TVar] -- ^ A stream of fresh type variables
+    }
 
 makeLenses ''UnificationState
-
-data Environment = Environment { _termCtx :: Map Var (Polytype, Bool)
-                               , _typeCtx :: [(TVar, Bool)] }
-
-makeLenses ''Environment
 
 type MonadCheckTerm m = (MonadState UnificationState m, MonadReader Environment m, MonadError String m)
 
 runUnification a xs = evalStateT a $ UnificationState mempty (freshTVarsFor xs)
 
-viewTVar :: MonadCheckTerm m => TVar -> m (Either Meta Bool)
+-- | Case split on whether a type variable is bound or is a metavariable.
+-- Note that since we use the same constructor for both, conflicts are possible.
+-- In that case, we prefer bound type variables. This is fragile and probably buggy.
+viewTVar :: MonadCheckTerm m => TVar -> m (Either Meta Constancy)
 viewTVar x = maybe (throwError $ "unbound type variable " ++ x) pure =<< runMaybeT (
     Right <$> MaybeT (lookup x <$> view typeCtx) <|> Left <$> MaybeT (use (metas.at x)))
 
@@ -46,18 +62,21 @@ ifMeta _ _ n = n
 freshTVar :: MonadCheckTerm m => m TVar
 freshTVar = head <$> (tvars <<%= tail)
 
-newMeta' :: MonadCheckTerm m => Bool -> m Type
+-- | Create a new metavariable.
+newMeta' :: MonadCheckTerm m => Constancy -> m Type
 newMeta' c = do
     x <- freshTVar
     l <- length <$> view typeCtx
     metas.at x ?= Meta Nothing c l
     pure (TVar x)
+-- | Create a new not-necessarily-constant metavariable.
 newMeta = newMeta' False
 newMetas n = replicateM n newMeta
 
--- Replace metavariables in a type with their solutions.
 class Zonk t where
+    -- | Recursively replace solved metavariables in a type with their solutions.
     zonk :: MonadCheckTerm m => t -> m t
+
 instance Zonk Type where
     zonk ty@(TVar x)  = viewTVar x >>= \case
         Left m | Just sol <- m ^. solution -> zonk sol
@@ -69,17 +88,18 @@ instance Zonk Type where
     zonk (Constant t) = Constant <$> zonk t
     zonk (TFix x t)   = typeCtx %~ ((x, False):) |- TFix x <$> zonk t
     zonk ty           = pure ty
+
 instance Zonk Polytype where
     zonk (Forall xs ty) = typeCtx %~ (xs ++) |- Forall xs <$> zonk ty
 
--- Instantiate a polytype to a type by replacing polymorphic type variables with fresh metavariables.
+-- | Instantiate a polytype to a type by replacing polymorphic type variables with fresh metavariables.
 instantiate :: MonadCheckTerm m => Polytype -> m Type
 instantiate (Monotype ty) = pure ty
 instantiate (Forall xs ty) = do
     s <- for xs \(x, c) -> (x,) <$> newMeta' c
     pure $ substituteType (Map.fromList s) ty
 
--- Generalise a type to a polytype by closing on its metavariables that aren't free in the context.
+-- | Generalise a type to a polytype by abstracting over its metavariables that aren't free in the context.
 generalise :: MonadCheckTerm m => Type -> m Polytype
 generalise ty = do
     ty <- zonk ty
@@ -88,18 +108,17 @@ generalise ty = do
     let generalisable = metas `Map.restrictKeys` freeTVars ty `Map.withoutKeys` freeInCtx
     pure $ Forall [(x, m ^. constant) | (x, m) <- Map.toList generalisable] ty
 
--- Constant types and terms
-
 class Constant t where
-    -- Test whether a type or term is constant, optionally forcing it to be by marking its metavariables as constant.
-    isConstant :: MonadCheckTerm m => Bool -> t -> m Bool
+    -- | Check whether a type or term is constant, optionally forcing it to be by marking its metavariables as constant.
+    isConstant :: MonadCheckTerm m => Bool -> t -> m Constancy
 
+-- | A type is constant if all uses of @▸@ occur under @■@.
 instance Constant Type where
     isConstant force (TVar x) = viewTVar x >>= \case
         Left m | Just sol <- m ^. solution ->
                     if m ^. constant then pure True else isConstant force sol
-            | force -> metas.ix x.constant <.= True
-            | otherwise -> pure (m ^. constant)
+               | force -> metas.ix x.constant <.= True
+               | otherwise -> pure (m ^. constant)
         Right c -> c <$ when (force && not c) (throwError $ "non-constant type variable " ++ x)
     isConstant force (t1 :*: t2) = (&&) <$> isConstant force t1 <*> isConstant force t2
     isConstant force (t1 :+: t2) = (&&) <$> isConstant force t1 <*> isConstant force t2
@@ -113,6 +132,7 @@ instance Constant Type where
 instance Constant Polytype where
     isConstant force (Forall xs ty) = typeCtx %~ (xs ++) |- isConstant force ty
 
+-- | A term is constant if it only refers to constant terms or terms with a constant type.
 instance Constant Term where
     isConstant force t = do
         ctx <- view termCtx
@@ -121,9 +141,12 @@ instance Constant Term where
         constantBinding (_, True) = pure True
         constantBinding (ty, False) = isConstant force ty
 
--- Unification
+-- * Unification
 
 infix 5 !:=
+
+-- | Attempt to assign a type to a metavariable.
+-- Performs occurs check, scope check and constancy check.
 (!:=) :: MonadCheckTerm m => (TVar, Meta) -> Type -> m ()
 (x, meta) !:= ty
     | Just sol <- meta ^. solution = sol !~ ty
@@ -142,6 +165,8 @@ infix 5 !:=
             metas.ix x.solution ?= ty
 
 infix 4 !~
+
+-- | Unify two types.
 (!~) :: MonadCheckTerm m => Type -> Type -> m ()
 ta1 :*: tb1  !~ ta2 :*: tb2      = ta1 !~ ta2 >> tb1 !~ tb2
 ta1 :+: tb1  !~ ta2 :+: tb2      = ta1 !~ ta2 >> tb1 !~ tb2
@@ -154,14 +179,19 @@ ty1          !~ ty2              = ifMeta ty1 (!:= ty2) $ ifMeta ty2 (!:= ty1) $
     ty2 <- zonk ty2
     throwError $ "cannot match type " ++ show ty1 ++ " with " ++ show ty2
 
--- Type checking and inference
+-- * Type checking and inference
 
+-- | The type of the integer recursion operator.
 intrecType :: Polytype
 intrecType = Forall [("a", False)] (("a" :->: "a") :->: "a" :->: ("a" :->: "a") :->: TInt :->: "a")
 
 class Types t where
     infix 4 !:
+
+    -- | Check that a term has the given type.
     (!:) :: MonadCheckTerm m => Term -> t -> m ()
+
+    -- | Infer a type for the given term.
     (?:) :: MonadCheckTerm m => Term -> m t
 
 instance Types Type where
