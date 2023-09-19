@@ -1,5 +1,5 @@
 -- A guarded variant of Curry's Y combinator.
--- Alternately, a proof of Löb's theorem for the "later" modality.
+-- Alternatively, a proof of Löb's theorem for the "later" modality.
 
 type Mu a = >Mu a -> a
 
