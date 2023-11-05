@@ -49,13 +49,12 @@ executable glam
     ImportQualifiedPost
     TupleSections
   ghc-options:         -W
-  ghcjs-options:       -dedupe
 
-  if impl(ghcjs)
+  if arch(javascript)
     main-is: MainJS.hs
     cpp-options: -DGHCJS_BROWSER
-    build-depends:
-      ghcjs-base
+    -- https://gitlab.haskell.org/ghc/ghc/-/merge_requests/14362
+    ld-options: -sEXPORTED_RUNTIME_METHODS=HEAP8,HEAPU8
   else
     main-is: Main.hs
     build-depends:

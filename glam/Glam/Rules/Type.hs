@@ -6,9 +6,9 @@ module Glam.Rules.Type where
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Monoid
-import Control.Monad.Except hiding (guard)
-import Control.Monad.Reader hiding (guard)
-import Control.Monad.Writer hiding (guard)
+import Control.Monad.Except
+import Control.Monad.Reader
+import Control.Monad.Writer
 import Control.Lens
 
 import Glam.Utils

@@ -14,9 +14,9 @@
       haskell = super.haskell // {
         packageOverrides = hself: hsuper: {
           glam = self.haskell.lib.overrideCabal (hself.callCabal2nix "glam" ./glam {}) {
-            doHaddock = !(hself.ghc.isGhcjs or false);
-            isLibrary = true; # otherwise doHaddock does nothing
+            doHaddock = !self.stdenv.hostPlatform.isGhcjs;
             haddockFlags = [ "--all" "--html-location='https://hackage.haskell.org/package/$pkg-$version/docs'" ];
+            isLibrary = true; # otherwise doHaddock does nothing
           };
         };
       };
@@ -25,19 +25,19 @@
       inherit system;
       overlays = [ haskellOverlay ];
     };
-    hpkgs = pkgs.haskell.packages.ghc94;
   in {
     packages.${system} = rec {
       default = glam;
-      glam = hpkgs.glam;
-      glam-js = pkgs.haskell.packages.ghcjs.glam;
+
+      glam = pkgs.haskellPackages.glam;
+      glam-js = pkgs.pkgsCross.ghcjs.haskell.packages.ghc912.glam;
 
       glam-min-js = pkgs.runCommand "glam.min.js" {
         nativeBuildInputs = with pkgs; [ closurecompiler ];
         glam = "${glam-js}/bin/glam.jsexe";
       } ''
         closure-compiler -O advanced -W quiet --jscomp_off undefinedVars \
-          --externs "$glam/all.js.externs" --js "$glam/all.js" --js_output_file "$out"
+          --externs "$glam/all.externs.js" --js "$glam/all.js" --js_output_file "$out"
       '';
 
       web = pkgs.runCommandLocal "glam-web" {
@@ -59,10 +59,10 @@
       '';
     };
 
-    devShells.${system}.default = hpkgs.shellFor {
+    devShells.${system}.default = pkgs.haskellPackages.shellFor {
       packages = ps: with ps; [ glam self.packages.${system}.glam-js ];
       nativeBuildInputs = with pkgs; [
-        haskell.compiler.ghcjs
+        pkgs.pkgsCross.ghcjs.buildPackages.haskell.compiler.ghc912
         cabal-install
         haskell-language-server
       ];
