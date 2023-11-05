@@ -1,21 +1,25 @@
 name: web
-on: [push, pull_request, workflow_dispatch]
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: cachix/install-nix-action@v20
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-            extra-substituters = https://nix.monade.li
-            extra-trusted-public-keys = nix.monade.li:2Zgy59ai/edDBizXByHMqiGgaHlE04G6Nzuhx1RPFgo=
+            extra-substituters = https://nix.monade.li https://ncfavier.cachix.org
+            extra-trusted-public-keys = nix.monade.li:2Zgy59ai/edDBizXByHMqiGgaHlE04G6Nzuhx1RPFgo= ncfavier.cachix.org-1:RpBMt+EIZOwVwU1CW71cWZAVJ9DCNbCMsX8VOGSf3ME=
       - name: Build
         run: |
           web=$(nix -L build .#web --print-out-paths)
           cp -rL --no-preserve=mode,ownership,timestamps "$web" pages
-      - uses: actions/upload-pages-artifact@v1
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: pages
           retention-days: 1
@@ -31,4 +35,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v2
+        uses: actions/deploy-pages@v4

@@ -3,6 +3,7 @@
 module Glam.Rules.Term where
 
 import Data.Traversable
+import Data.Maybe
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Set qualified as Set
@@ -60,7 +61,7 @@ ifMeta (TVar x) y n = maybe n (curry y x) =<< use (metas.at x)
 ifMeta _ _ n = n
 
 freshTVar :: MonadCheckTerm m => m TVar
-freshTVar = head <$> (tvars <<%= tail)
+freshTVar = tvars %%= fromJust . uncons
 
 -- | Create a new metavariable.
 newMeta' :: MonadCheckTerm m => Constancy -> m Type
