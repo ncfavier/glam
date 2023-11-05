@@ -51,11 +51,9 @@ executable glam
   ghc-options:         -W
   ghcjs-options:       -dedupe
 
-  if impl(ghcjs)
+  if os(ghcjs)
     main-is: MainJS.hs
     cpp-options: -DGHCJS_BROWSER
-    build-depends:
-      ghcjs-base
   else
     main-is: Main.hs
     build-depends:

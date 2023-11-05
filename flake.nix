@@ -1,7 +1,8 @@
 {
   inputs.nixpkgs.url = "nixpkgs/nixpkgs-unstable";
+  inputs.nixpkgs2.url = "github:ncfavier/nixpkgs/ghc98";
 
-  outputs = { self, nixpkgs }: let
+  outputs = { self, nixpkgs, nixpkgs2 }: let
     examples = [
       { name = "fibonacci"; description = "Fibonacci sequence"; }
       { name = "primes"; description = "Prime numbers"; }
@@ -26,6 +27,9 @@
       overlays = [ haskellOverlay ];
     };
     hpkgs = pkgs.haskell.packages.ghc94;
+    pkgs2 = import nixpkgs2 {
+      inherit system;
+    };
   in {
     packages.${system} = rec {
       default = glam;
@@ -34,7 +38,8 @@
 
       glam-min-js = pkgs.runCommand "glam.min.js" {
         nativeBuildInputs = with pkgs; [ closurecompiler ];
-        glam = "${glam-js}/bin/glam.jsexe";
+        glam = "${pkgs.pkgsCross.ghcjs.haskell.packages.ghc98.glam}/bin/glam.jsexe";
+        # glam = /home/n/git/glam/dist-newstyle/build/javascript-ghcjs/ghc-9.7.20230505/glam-0.0/x/glam/build/glam/glam.jsexe;
       } ''
         closure-compiler -O advanced -W quiet --jscomp_off undefinedVars \
           --externs "$glam/all.js.externs" --js "$glam/all.js" --js_output_file "$out"
@@ -62,7 +67,7 @@
     devShells.${system}.default = hpkgs.shellFor {
       packages = ps: with ps; [ glam self.packages.${system}.glam-js ];
       nativeBuildInputs = with pkgs; [
-        haskell.compiler.ghcjs
+        pkgs2.pkgsCross.ghcjs.buildPackages.haskell.compiler.ghc98
         cabal-install
         haskell-language-server
       ];

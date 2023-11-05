@@ -1,1 +1,2 @@
-packages: glam
+packages: glam ~/th-abstraction
+allow-newer: base, template-haskell, deepseq
