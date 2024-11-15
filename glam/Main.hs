@@ -43,8 +43,6 @@ settings = Settings { complete = comp
 
 prompt = "> "
 
-greet = putStrLn "glam, the guarded λ-calculus (https://github.com/ncfavier/glam)"
-
 main = runGlamT do
     (interactive, fs) <- liftIO parseArgs
     liftIO $ hSetBuffering stdout NoBuffering
@@ -54,7 +52,6 @@ main = runGlamT do
         contents <- liftIO contents
         liftIO . either die (mapM_ putStrLn) =<< runFile name contents
     when interactive do
-        liftIO greet
         runInputT settings repl
 
 commands =

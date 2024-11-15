@@ -2,7 +2,7 @@ cabal-version:       2.4
 
 name:                glam
 version:             0.0
-synopsis:            The guarded λ-calculus
+synopsis:            Polymorphic guarded λ-calculus
 description:
   An implementation of Clouston, Bizjak, Bugge and Birkedal's guarded λ-calculus with rank-1 polymorphism and automatic boxing.
 homepage:            https://github.com/ncfavier/glam
