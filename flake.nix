@@ -25,12 +25,13 @@
       inherit system;
       overlays = [ haskellOverlay ];
     };
+    ghcVer = "ghc912";
   in {
     packages.${system} = rec {
       default = glam;
 
-      glam = pkgs.haskellPackages.glam;
-      glam-js = pkgs.pkgsCross.ghcjs.haskell.packages.ghc912.glam;
+      glam = pkgs.haskell.packages.${ghcVer}.glam;
+      glam-js = pkgs.pkgsCross.ghcjs.haskell.packages.${ghcVer}.glam;
 
       glam-min-js = pkgs.runCommand "glam.min.js" {
         nativeBuildInputs = with pkgs; [ closurecompiler ];
@@ -59,10 +60,10 @@
       '';
     };
 
-    devShells.${system}.default = pkgs.haskellPackages.shellFor {
+    devShells.${system}.default = pkgs.haskell.packages.${ghcVer}.shellFor {
       packages = ps: with ps; [ glam self.packages.${system}.glam-js ];
       nativeBuildInputs = with pkgs; [
-        pkgs.pkgsCross.ghcjs.buildPackages.haskell.compiler.ghc912
+        pkgs.pkgsCross.ghcjs.buildPackages.haskell.compiler.${ghcVer}
         cabal-install
         haskell-language-server
       ];
